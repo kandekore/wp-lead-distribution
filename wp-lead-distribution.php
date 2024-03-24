@@ -16,3 +16,4 @@ define('LMP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 include_once plugin_dir_path(__FILE__) . 'includes/api-endpoints.php';
 include_once plugin_dir_path(__FILE__) . 'includes/lead-processing.php';
 include_once plugin_dir_path(__FILE__) . 'includes/utility-functions.php';
+include_once plugin_dir_path(__FILE__) . 'admin/admin-pages.php';
