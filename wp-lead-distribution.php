@@ -19,6 +19,7 @@ include_once plugin_dir_path(__FILE__) . 'includes/utility-functions.php';
 include_once plugin_dir_path(__FILE__) . 'admin/admin-pages.php';
 include_once plugin_dir_path(__FILE__) . 'includes/load-postcodes.php';
 include_once plugin_dir_path(__FILE__) . 'admin/user-signup.php';
+include_once plugin_dir_path(__FILE__) . 'admin/user-backend.php';
 
 
 register_deactivation_hook(__FILE__, 'clear_saved_postcode_data');

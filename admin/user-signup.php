@@ -30,24 +30,38 @@ function add_custom_postcode_selection_to_checkout($checkout) {
     echo '</div>';
 }
 
+// add_action('woocommerce_checkout_update_order_meta', 'save_custom_postcode_selection');
 add_action('woocommerce_checkout_update_order_meta', 'save_custom_postcode_selection');
 function save_custom_postcode_selection($order_id) {
-    $postcode_areas = get_option('custom_postcode_areas', true);
-    $postcode_areas = $postcode_areas ? json_decode($postcode_areas, true) : [];
-    $selected_areas = [];
-
-    foreach ($postcode_areas as $region => $codes) {
-        foreach ($codes as $code) {
-            if (!empty($_POST['postcode_area_' . sanitize_title($code)])) {
-                $selected_areas[] = $code;
+    // Directly access $_POST data for selected postcode areas
+    if (isset($_POST['postcode_areas']) && is_array($_POST['postcode_areas'])) {
+        $selected_areas = [];
+        
+        // Iterate over submitted postcode area selections
+        foreach ($_POST['postcode_areas'] as $region => $codes) {
+            if (is_array($codes)) { // Ensure $codes is an array
+                foreach ($codes as $code) {
+                    $selected_areas[$region][] = sanitize_text_field($code);
+                }
             }
         }
-    }
-
-    if (!empty($selected_areas)) {
+        
+        // Save sanitized postcode areas to order meta
         update_post_meta($order_id, 'selected_postcode_areas', json_encode($selected_areas));
+        
+        // Get the customer ID associated with the order
+        $order = wc_get_order($order_id);
+        $customer_id = $order->get_customer_id();
+        
+        // Only proceed if a customer ID is found
+        if ($customer_id) {
+            // Additionally, save to user meta
+            update_user_meta($customer_id, 'selected_postcode_areas', json_encode($selected_areas));
+        }
     }
 }
+
+
 
 add_action('wp_footer', 'postcode_selection_scripts');
 function postcode_selection_scripts() {
@@ -69,3 +83,4 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php
     }
 }
+
