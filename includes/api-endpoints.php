@@ -6,9 +6,8 @@ add_action('rest_api_init', function () {
     register_rest_route('lead-management/v1', '/submit-lead', array(
         'methods' => 'GET',
         'callback' => 'process_lead_submission',
-        'permission_callback' => function () {
-            return current_user_can('manage_options');
-        }
+        'permission_callback' => '__return_true',
+
     ));
 });
 
