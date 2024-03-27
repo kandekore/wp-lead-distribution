@@ -21,6 +21,11 @@ include_once plugin_dir_path(__FILE__) . 'includes/load-postcodes.php';
 include_once plugin_dir_path(__FILE__) . 'admin/user-signup.php';
 include_once plugin_dir_path(__FILE__) . 'admin/user-backend.php';
 include_once plugin_dir_path(__FILE__) . 'admin/customer-account-page.php';
+include_once plugin_dir_path(__FILE__) . 'products/credits.php';
+include_once plugin_dir_path(__FILE__) . 'products/lead-distribution.php';
+include_once plugin_dir_path(__FILE__) . 'products/product-meta.php';
+
+
 
 register_deactivation_hook(__FILE__, 'clear_saved_postcode_data');
 

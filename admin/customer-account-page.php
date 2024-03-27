@@ -52,4 +52,39 @@ function areas_endpoint_content() {
 add_action('woocommerce_account_areas_endpoint', 'areas_endpoint_content');
 
 
+add_action('woocommerce_account_dashboard', 'display_user_credit_balance_and_renewal_info');
 
+function display_user_credit_balance_and_renewal_info() {
+    $user_id = get_current_user_id();
+    $credits = (int) get_user_meta($user_id, '_user_credits', true); // Casting to ensure we have an integer value
+
+    // Display the credit balance
+    echo '<div class="user-credits-info">';
+    echo '<h3>' . __('Your Credits', 'text-domain') . '</h3>';
+    printf('<p>' . __('You currently have %s credits.', 'text-domain') . '</p>', esc_html($credits));
+
+    // Explain the renewal condition
+    echo '<p>' . __('Your subscription will automatically renew when your credits drop to 5 or below.', 'text-domain') . '</p>';
+    echo '</div>';
+}
+
+function enqueue_account_page_styles() {
+    if (is_account_page()) {
+        // Assuming you have a custom CSS file
+        wp_enqueue_style('my-account-custom-style', get_template_directory_uri() . '/css/my-account.css');
+        
+        // Or directly adding inline styles
+        $custom_css = "
+            .user-credits-info {
+                background-color: #f7f7f7;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+            .user-credits-info h3 {
+                color: #333;
+            }
+        ";
+        wp_add_inline_style('woocommerce-general', $custom_css);
+    }
+}
+add_action('wp_enqueue_scripts', 'enqueue_account_page_styles');
