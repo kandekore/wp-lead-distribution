@@ -16,7 +16,7 @@ define('LMP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 include_once plugin_dir_path(__FILE__) . 'includes/api-endpoints.php';
 include_once plugin_dir_path(__FILE__) . 'includes/lead-processing.php';
 include_once plugin_dir_path(__FILE__) . 'includes/utility-functions.php';
-include_once plugin_dir_path(__FILE__) . 'admin/admin-pages.php';
+;
 include_once plugin_dir_path(__FILE__) . 'includes/load-postcodes.php';
 include_once plugin_dir_path(__FILE__) . 'admin/user-signup.php';
 include_once plugin_dir_path(__FILE__) . 'admin/user-backend.php';
@@ -24,7 +24,7 @@ include_once plugin_dir_path(__FILE__) . 'admin/customer-account-page.php';
 include_once plugin_dir_path(__FILE__) . 'products/credits.php';
 include_once plugin_dir_path(__FILE__) . 'products/lead-distribution.php';
 include_once plugin_dir_path(__FILE__) . 'products/product-meta.php';
-
+include_once plugin_dir_path(__FILE__) . 'admin/admin-pages.php';
 
 
 register_deactivation_hook(__FILE__, 'clear_saved_postcode_data');

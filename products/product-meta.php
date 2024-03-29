@@ -31,3 +31,35 @@ add_action('woocommerce_subscription_status_active', function($subscription) {
         }
     }
 });
+// Handle credit assignment for subscription activations and renewals.
+add_action('woocommerce_order_status_completed', function($order_id) {
+    $order = wc_get_order($order_id);
+    $user_id = $order->get_user_id();
+
+    // Ensure we have a user ID to work with.
+    if (!$user_id) return;
+
+    // Initialize a flag to detect if this order is a subscription renewal.
+    $is_renewal = false;
+
+    // Check if this is a subscription renewal.
+    if (function_exists('wcs_order_contains_renewal') && wcs_order_contains_renewal($order)) {
+        $is_renewal = true;
+    }
+
+    foreach ($order->get_items() as $item) {
+        $product = $item->get_product();
+
+        if ($product && $product->get_meta('_credits')) {
+            $credits = (int) $product->get_meta('_credits');
+            $existing_credits = (int) get_user_meta($user_id, '_user_credits', true);
+
+            // For renewals or new orders, add to existing credits.
+            if ($is_renewal || !$is_renewal && $existing_credits > 0) {
+                $credits += $existing_credits;
+            }
+
+            update_user_meta($user_id, '_user_credits', $credits);
+        }
+    }
+}, 10, 1);
