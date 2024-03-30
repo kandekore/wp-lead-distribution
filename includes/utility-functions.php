@@ -45,6 +45,7 @@ function store_lead($lead_data, $user_id) {
 
     // Insert the post into the database
     $post_id = wp_insert_post($post_data);
+    return $post_id;
 
     // Check for errors
     if (is_wp_error($post_id)) {

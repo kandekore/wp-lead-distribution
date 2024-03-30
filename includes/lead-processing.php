@@ -5,8 +5,25 @@ function process_lead_submission(WP_REST_Request $request) {
     // Extract relevant data from the request
     $lead_data = [
         'postcode' => sanitize_text_field($request->get_param('postcode')),
-        // Other lead details as needed
+        'registration' => sanitize_text_field($request->get_param('reg')),
+        'model' => sanitize_text_field($request->get_param('model')),
+        'date' => sanitize_text_field($request->get_param('date')),
+        'cylinder' => sanitize_text_field($request->get_param('cylinder')),
+        'colour' => sanitize_text_field($request->get_param('colour')),
+        'keepers' => sanitize_text_field($request->get_param('keepers')),
+        'contact' => sanitize_text_field($request->get_param('contact')),
+        'email' => sanitize_email($request->get_param('email')),
+        'info' => sanitize_textarea_field($request->get_param('info')), 
+        'fuel' => sanitize_text_field($request->get_param('fuel')),
+        'mot' => sanitize_text_field($request->get_param('mot')),
+        'trans' => sanitize_text_field($request->get_param('trans')),
+        'doors' => intval($request->get_param('doors')),
+        'motd' => sanitize_text_field($request->get_param('motd')),
     ];
+    // $lead_id = store_lead($lead_data);
+
+   
+
     $postcode_prefix = substr($lead_data['postcode'], 0, 2);
     $eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix);
 
@@ -21,9 +38,15 @@ function process_lead_submission(WP_REST_Request $request) {
     // Randomly pick an eligible recipient from the array
     $random_key = array_rand($eligible_recipients);
     $recipient_id = $eligible_recipients[$random_key];
-    
+    $lead_id = store_lead($lead_data, $recipient_id);
+     // Ensure lead was successfully stored
+     if (is_wp_error($lead_id)) {
+        return new WP_REST_Response(['message' => 'Failed to store lead'], 500);
+    }
     // Deduct a credit from the chosen recipient and send the lead
     if (deduct_credit_from_user($recipient_id)) {
+        assign_lead_to_user($recipient_id, $lead_data, $lead_id);
+        send_lead_email_to_user($recipient_id, $lead_data);
         // assign_lead_to_user($recipient_id, $lead_data);
         // send_lead_email_to_user($recipient_id, $lead_data);
         return new WP_REST_Response(['message' => 'Lead sent successfully to ' . $recipient_id], 200);
