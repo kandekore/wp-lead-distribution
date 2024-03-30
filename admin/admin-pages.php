@@ -1,7 +1,5 @@
 <?php
 include_once plugin_dir_path(__FILE__) . '../includes/load-postcodes.php';
-add_action('admin_menu', 'register_my_plugin_menu_pages');
-
 function register_my_plugin_menu_pages() {
     // Add the main menu page
     add_menu_page(
@@ -47,6 +45,10 @@ function register_my_plugin_menu_pages() {
     // Remove the duplicate menu item for the main menu page.
     remove_submenu_page('lead-management-dashboard', 'lead-management-dashboard');
 }
+
+// Hook into the 'admin_menu' action to register the menu pages
+add_action('admin_menu', 'register_my_plugin_menu_pages');
+
 
 // Define your page rendering functions below
 function render_lead_management_dashboard() {
@@ -200,6 +202,53 @@ function render_user_credits_admin_page() {
     }
 
     echo '</tbody></table>';
+    echo '</div>';
+}
+function render_lead_management_page() {
+    // Nonce field for security
+    $nonce_action = 'lead_management_filter_action';
+    $nonce_name = 'lead_management_filter_nonce';
+
+    // Display page title
+    echo '<div class="wrap"><h1>Lead Management</h1>';
+
+    // Start the form for filters
+    echo '<form id="lead-management-filters" method="GET">';
+    echo '<input type="hidden" name="page" value="lead-management"/>';
+
+    // Add nonce for security
+    wp_nonce_field($nonce_action, $nonce_name);
+
+    // Dropdown for filtering by author
+    wp_dropdown_users([
+        'show_option_all' => 'All Authors',
+        'name' => 'author',
+        'role' => 'author', // Changed to lowercase
+        'selected' => isset($_GET['author']) ? $_GET['author'] : 0,
+    ]);
+    
+
+    // Dropdown for filtering by date
+    ?>
+    <select name="lead_date_filter">
+        <option value="">All Dates</option>
+        <option value="today" <?php selected(isset($_GET['lead_date_filter']) ? $_GET['lead_date_filter'] : '', 'today'); ?>>Today</option>
+        <option value="yesterday" <?php selected(isset($_GET['lead_date_filter']) ? $_GET['lead_date_filter'] : '', 'yesterday'); ?>>Yesterday</option>
+        <option value="this_week" <?php selected(isset($_GET['lead_date_filter']) ? $_GET['lead_date_filter'] : '', 'this_week'); ?>>This Week</option>
+        <option value="last_week" <?php selected(isset($_GET['lead_date_filter']) ? $_GET['lead_date_filter'] : '', 'last_week'); ?>>Last Week</option>
+        <option value="this_month" <?php selected(isset($_GET['lead_date_filter']) ? $_GET['lead_date_filter'] : '', 'this_month'); ?>>This Month</option>
+        <option value="last_month" <?php selected(isset($_GET['lead_date_filter']) ? $_GET['lead_date_filter'] : '', 'last_month'); ?>>Last Month</option>
+    </select>
+    <?php
+    // Submit button for the filters
+    submit_button('Filter', 'primary', 'filter_action', false);
+
+    echo '</form>';
+
+    // Placeholder for the leads table (You will implement this part based on how you store and display leads)
+    echo '<h2>Leads List</h2>';
+    // TODO: Implement leads list table based on the applied filters
+
     echo '</div>';
 }
 
