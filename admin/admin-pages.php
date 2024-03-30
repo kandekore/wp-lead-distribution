@@ -1,33 +1,68 @@
 <?php
 include_once plugin_dir_path(__FILE__) . '../includes/load-postcodes.php';
+add_action('admin_menu', 'register_my_plugin_menu_pages');
 
-add_action('admin_menu', 'register_custom_admin_page');
-function register_custom_admin_page() {
+function register_my_plugin_menu_pages() {
+    // Add the main menu page
     add_menu_page(
-        'Manage Postcode Areas',
-        'Postcode Areas',
-        'manage_options',
-        'manage-postcode-areas',
-        'render_custom_admin_page'
+        'Lead Management', // Page title
+        'Lead Management', // Menu title
+        'manage_options', // Capability
+        'lead-management-dashboard', // Menu slug
+        'render_lead_management_dashboard', // Function to display the dashboard page content
+        'dashicons-admin-site', // Icon URL
+        6 // Position
     );
+
+    // Add submenu for Managing Postcode Areas
+    add_submenu_page(
+        'lead-management-dashboard', // Parent slug
+        'Manage Postcode Areas', // Page title
+        'Postcode Areas', // Menu title
+        'manage_options', // Capability
+        'manage-postcode-areas', // Menu slug
+        'render_custom_admin_page' // Function to display the page content
+    );
+
+    // Add submenu for User Credits Management
+    add_submenu_page(
+        'lead-management-dashboard', // Parent slug
+        'User Credits Management', // Page title
+        'User Credits', // Menu title
+        'manage_options', // Capability
+        'user-credits-management', // Menu slug
+        'render_user_credits_admin_page' // Function to display the page content
+    );
+
+    // Add submenu for Regions and Users with Credits
+    add_submenu_page(
+        'lead-management-dashboard', // Parent slug
+        'Regions and Users with Credits', // Page title
+        'Regions & Users', // Menu title
+        'manage_options', // Capability
+        'regions-and-users-credits', // Menu slug
+        'render_regions_and_users_admin_page' // Function to display the page content
+    );
+
+    // Remove the duplicate menu item for the main menu page.
+    remove_submenu_page('lead-management-dashboard', 'lead-management-dashboard');
 }
 
+// Define your page rendering functions below
+function render_lead_management_dashboard() {
+    echo '<h1>Lead Management Dashboard</h1>';
+    // Dashboard content here
+}
 /**
  * Render a custom admin page for managing postcode areas.
- */
-function render_custom_admin_page() {
+ */function render_custom_admin_page() {
+    
+    // Enqueue jQuery UI for accordion if not already included
+    wp_enqueue_script('jquery-ui-accordion');
+
     // Nonce fields for security
     $nonce_action = 'save_postcode_areas_nonce_action';
     $nonce_name = 'save_postcode_areas_nonce';
-
-    // Load or set default postcode areas
-    $postcode_areas = get_option('custom_postcode_areas');
-    if (!$postcode_areas) {
-        $postcode_areas = load_postcode_areas_from_json(); // Ensure this function returns an array
-        update_option('custom_postcode_areas', wp_json_encode($postcode_areas));
-    } else {
-        $postcode_areas = json_decode($postcode_areas, true);
-    }
 
     // Check if form is submitted and nonce is verified
     if (!empty($_POST['save_postcode_areas']) && check_admin_referer($nonce_action, $nonce_name)) {
@@ -43,77 +78,87 @@ function render_custom_admin_page() {
     }
 
     // Load the current saved or default postcode areas
-    $postcode_areas = load_postcode_areas_from_json(); // Ensure this function returns an array
-    $saved_postcode_areas = json_decode(get_option('custom_postcode_areas', wp_json_encode($postcode_areas)), true);
-    if (!is_array($saved_postcode_areas)) {
-        $saved_postcode_areas = [];
-    }
+    $saved_postcode_areas = json_decode(get_option('custom_postcode_areas'), true) ?: [];
 
     // Begin the form output
     echo '<div class="wrap"><h1>Manage Postcode Areas</h1><form method="post" action="">';
     wp_nonce_field($nonce_action, $nonce_name);
 
-    // Iterate through regions and codes, rendering checkboxes
-    foreach ($postcode_areas as $region => $codes) {
-      // Inside your foreach loop for regions in render_custom_admin_page
-echo "<h3>" . esc_html($region) . "</h3>";
-echo "<label><input type='checkbox' class='region-select-all' data-region='" . esc_attr($region) . "'> Select All in " . esc_html($region) . "</label><br>";
+    echo '<div id="postcode-accordion">'; // Start of accordion container
 
-        
+    // Iterate through regions and codes, rendering checkboxes within accordion sections
+    foreach ($saved_postcode_areas as $region => $codes) {
+        echo '<h3>' . esc_html($region) . '</h3>';
+        echo '<div>'; // Start of accordion content
+        echo "<label><input type='checkbox' class='region-select-all' data-region='" . esc_attr($region) . "'> Select All in " . esc_html($region) . "</label><br>";
         foreach ($codes as $code) {
-            $is_checked = in_array($code, $saved_postcode_areas[$region] ?? [], true) ? 'checked="checked"' : '';
+            $is_checked = in_array($code, $codes, true) ? 'checked="checked"' : '';
             echo "<label><input type='checkbox' class='region " . esc_attr($region) . "' name='postcode_areas[" . esc_attr($region) . "][]' value='" . esc_attr($code) . "' $is_checked> " . esc_html($code) . "</label><br>";
         }
+        echo '</div>'; // End of accordion content
     }
-    ?>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('.region-select-all').forEach(function(selectAllCheckbox) {
-            selectAllCheckbox.addEventListener('change', function() {
-                let region = this.getAttribute('data-region');
-                let checkboxes = document.querySelectorAll('input[name="postcode_areas['+region+'][]"]');
-                checkboxes.forEach(function(checkbox) {
-                    checkbox.checked = selectAllCheckbox.checked;
-                });
-            });
-        });
-    });
-</script>
-<?php
+
+    echo '</div>'; // End of accordion container
 
     echo '<input type="submit" name="save_postcode_areas" value="Save Postcode Areas" class="button button-primary">';
     echo '</form></div>';
+
+    // Initialize the accordion feature
+    echo "<script>
+    jQuery(document).ready(function($) {
+        $('#postcode-accordion').accordion({
+            collapsible: true,
+            heightStyle: 'content'
+        });
+    });
+    </script>";
+
+    echo "<style>
+    #postcode-accordion .ui-accordion-header {
+        background-color: #0073aa;
+        color: #ffffff;
+        font-weight: bold;
+        padding: 10px 15px;
+        border-top: 1px solid #ffffff;
+    }
+    #postcode-accordion .ui-accordion-header.ui-state-active {
+        background-color: #005177;
+    }
+    #postcode-accordion .ui-accordion-header.ui-state-default {
+        background-color: #0073aa;
+    }
+    #postcode-accordion .ui-accordion-content {
+        background-color: #f1f1f1;
+        border: 1px solid #ddd;
+        padding: 15px;
+        margin-bottom: 10px;
+    }
+    .region-select-all {
+        margin-bottom: 10px;
+        display: inline-block;
+        font-weight: normal;
+    }
+    .region {
+        margin-left: 20px;
+        display: block;
+    }
+</style>";
+    
 }
 
-function register_user_credits_admin_page() {
-    add_menu_page(
-        'User Credits Management', // Page title
-        'User Credits', // Menu title
-        'manage_options', // Capability
-        'user-credits-management', // Menu slug
-        'render_user_credits_admin_page', // Function to display the page content
-        'dashicons-money', // Icon URL (Dashicon)
-        6 // Position
-    );
-}
-add_action('admin_menu', 'register_user_credits_admin_page');
+
 
 function render_user_credits_admin_page() {
-    // Handle form submission for updating credits (if any)
-    if (isset($_POST['update_credits']) && check_admin_referer('update_user_credits_nonce')) {
-        // Assuming you have fields named 'user_id[]' and 'new_credits[]' in your form
-        $user_ids = $_POST['user_id'] ?? [];
-        $new_credits = $_POST['new_credits'] ?? [];
+    // Handle addition and subtraction of credits
+    if (isset($_POST['action'], $_POST['user_id']) && in_array($_POST['action'], ['add', 'subtract']) && check_admin_referer('update_user_credits_nonce')) {
+        $user_id = intval($_POST['user_id']);
+        $current_credits = intval(get_user_meta($user_id, '_user_credits', true));
+        $new_credits = $_POST['action'] === 'add' ? $current_credits + 10 : max($current_credits - 10, 0);
         
-        foreach ($user_ids as $index => $user_id) {
-            if (isset($new_credits[$index])) {
-                update_user_meta($user_id, '_user_credits', sanitize_text_field($new_credits[$index]));
-            }
-        }
-        
+        update_user_meta($user_id, '_user_credits', $new_credits);
         echo "<div class='notice notice-success'><p>User credits updated successfully.</p></div>";
     }
-    
+
     // Fetch users with credits
     $args = [
         'meta_key' => '_user_credits',
@@ -124,37 +169,42 @@ function render_user_credits_admin_page() {
     $users_with_credits = get_users($args);
 
     echo '<div class="wrap"><h1>User Credits Management</h1>';
-    
-    // Start the form
-    echo '<form method="post" action="">';
     wp_nonce_field('update_user_credits_nonce');
-    
+
     // Table headers
-    echo '<table class="wp-list-table widefat fixed striped"><thead><tr><th>User</th><th>Credits</th><th>New Credits</th></tr></thead><tbody>';
-    
+    echo '<table class="wp-list-table widefat fixed striped"><thead><tr><th>User</th><th>Credits</th><th>Actions</th></tr></thead><tbody>';
+
     foreach ($users_with_credits as $user) {
         $current_credits = get_user_meta($user->ID, '_user_credits', true);
-        echo "<tr><td>{$user->display_name} ({$user->user_email})</td><td>{$current_credits}</td>";
-        echo '<td><input type="hidden" name="user_id[]" value="' . esc_attr($user->ID) . '"><input type="number" name="new_credits[]" min="0" step="1" value="' . esc_attr($current_credits) . '"></td></tr>';
+        $edit_user_link = get_edit_user_link($user->ID);
+        
+        // User row with Edit link
+        echo "<tr><td><a href='{$edit_user_link}'>{$user->display_name}</a> ({$user->user_email})</td><td>{$current_credits}</td>";
+
+        // Action buttons
+        echo '<td>';
+        echo '<form method="post" action="" style="display: inline-block;">';
+        wp_nonce_field('update_user_credits_nonce');
+        echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
+        echo '<input type="hidden" name="action" value="add">';
+        echo '<input type="submit" value="+10 Credits" class="button button-primary">';
+        echo '</form>';
+
+        echo '<form method="post" action="" style="display: inline-block; margin-left: 10px;">';
+        wp_nonce_field('update_user_credits_nonce');
+        echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
+        echo '<input type="hidden" name="action" value="subtract">';
+        echo '<input type="submit" value="-10 Credits" class="button">';
+        echo '</form>';
+        echo '</td></tr>';
     }
-    
+
     echo '</tbody></table>';
-    echo '<input type="submit" name="update_credits" value="Update Credits" class="button button-primary">';
-    echo '</form></div>';
+    echo '</div>';
 }
 
-function register_regions_and_users_admin_page() {
-    add_menu_page(
-        'Regions and Users with Credits', // Page Title
-        'Regions & Users', // Menu Title
-        'manage_options', // Capability required
-        'regions-and-users-credits', // Menu slug
-        'render_regions_and_users_admin_page', // Callback function
-        'dashicons-admin-site-alt3', // Icon URL
-        6 // Position
-    );
-}
-add_action('admin_menu', 'register_regions_and_users_admin_page');
+
+
 
 
 function render_regions_and_users_admin_page() {
