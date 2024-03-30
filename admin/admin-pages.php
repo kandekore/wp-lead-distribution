@@ -12,10 +12,22 @@ function register_custom_admin_page() {
     );
 }
 
+/**
+ * Render a custom admin page for managing postcode areas.
+ */
 function render_custom_admin_page() {
     // Nonce fields for security
     $nonce_action = 'save_postcode_areas_nonce_action';
     $nonce_name = 'save_postcode_areas_nonce';
+
+    // Load or set default postcode areas
+    $postcode_areas = get_option('custom_postcode_areas');
+    if (!$postcode_areas) {
+        $postcode_areas = load_postcode_areas_from_json(); // Ensure this function returns an array
+        update_option('custom_postcode_areas', wp_json_encode($postcode_areas));
+    } else {
+        $postcode_areas = json_decode($postcode_areas, true);
+    }
 
     // Check if form is submitted and nonce is verified
     if (!empty($_POST['save_postcode_areas']) && check_admin_referer($nonce_action, $nonce_name)) {

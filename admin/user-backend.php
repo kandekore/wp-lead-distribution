@@ -43,8 +43,12 @@ function admin_edit_user_postcode_selections($user) {
     $all_postcode_areas = json_decode(get_option('custom_postcode_areas'), true);
     $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
 
-    echo '<h3>' . __('Edit Selected Postcode Areas') . '</h3>';
+    if (!is_array($selected_postcode_areas)) {
+        $selected_postcode_areas = [];
+    }
 
+    echo '<h3>' . __('Edit Selected Postcode Areas') . '</h3>';
+   
     // Display checkboxes for all postcode areas
     foreach ($all_postcode_areas as $region => $codes) {
         echo '<p><strong>' . esc_html($region) . ':</strong></p>';

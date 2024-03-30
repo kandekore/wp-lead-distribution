@@ -17,13 +17,14 @@ function register_lead_post_type() {
 }
 
 
-function store_lead($lead_data) {
+function store_lead($lead_data, $user_id) {
     // Prepare post data
     $post_data = [
         'post_title'    => wp_strip_all_tags($lead_data['registration']), // Use the car's registration as the post title for easy identification
         'post_content'  => wp_json_encode($lead_data), // Store all lead data as JSON in the post content
         'post_status'   => 'publish',
         'post_type'     => 'lead',
+        'post_author'   => $user_id, // Assign lead to this user
         'meta_input' => [
             'postcode' => $lead_data['postcode'],
             'registration' => $lead_data['registration'],
@@ -40,7 +41,6 @@ function store_lead($lead_data) {
             'doors' => $lead_data['doors'],
             'mot_due' => $lead_data['motd'], 
         ],
-        
     ];
 
     // Insert the post into the database

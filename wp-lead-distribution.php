@@ -29,6 +29,15 @@ include_once plugin_dir_path(__FILE__) . 'admin/admin-pages.php';
 
 register_deactivation_hook(__FILE__, 'clear_saved_postcode_data');
 
+register_activation_hook(__FILE__, 'my_plugin_activate');
+function my_plugin_activate() {
+    $default_postcode_areas = load_postcode_areas_from_json(); // Load default postcodes
+    if (!get_option('custom_postcode_areas')) {
+        update_option('custom_postcode_areas', wp_json_encode($default_postcode_areas));
+    }
+}
+
+
 function clear_saved_postcode_data() {
     delete_option('custom_postcode_areas');
 }
