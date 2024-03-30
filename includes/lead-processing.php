@@ -2,73 +2,122 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;    
 function process_lead_submission(WP_REST_Request $request) {
-    // Assume validation of required parameters has already happened
-    
-    // Extract lead data
+    // Extract relevant data from the request
     $lead_data = [
         'postcode' => sanitize_text_field($request->get_param('postcode')),
-        // Additional lead details...
+        // Other lead details as needed
     ];
-    
-    // Extract the first two characters of the lead's postcode
     $postcode_prefix = substr($lead_data['postcode'], 0, 2);
-    
-    // Get eligible recipients based on the first two characters and their selected postcodes
     $eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix);
-    
-    // No eligible recipients found
-    if (empty($eligible_recipients)) {
-        return new WP_REST_Response(['message' => 'No eligible recipients for this postcode'], 404);
+
+    // Output for testing: List of eligible recipient IDs
+    echo "Eligible Recipients for Postcode Prefix {$postcode_prefix}: " . implode(', ', $eligible_recipients) . "<br>";
+
+    // Process each eligible recipient
+    foreach ($eligible_recipients as $recipient_id) {
+        // Placeholder: Logic to process the recipient, such as deducting credits, assigning the lead, and sending emails
+        echo "Processing recipient ID: {$recipient_id}<br>";
+        // Deduct a credit, assign the lead, and send the email
+        // For testing, these actions are simply echoed
     }
-    
-    // For demonstration, choosing the first eligible recipient
-    // In production, you would use a more complex logic like round-robin
-    $recipient_id = $eligible_recipients[0];
-    
-    // Deduct a credit from the chosen recipient and send the lead
-    if (deduct_credit_from_user($recipient_id)) {
-        // assign_lead_to_user($recipient_id, $lead_data);
-        // send_lead_email_to_user($recipient_id, $lead_data);
-        return new WP_REST_Response(['message' => 'Lead sent successfully to ' . $recipient_id], 200);
-    } else {
-        return new WP_REST_Response(['message' => 'Failed to send lead, user out of credits'], 500);
-    }
+
+    // For testing, simply return a success message without actual WP_REST_Response
+    return "Lead processed successfully.";
 }
 
 function get_eligible_recipients_for_lead($postcode_prefix) {
     $eligible_recipients = [];
-    // Retrieve users who selected postcodes that start with the same two characters
-    $users = get_users();
+    $users = get_users(); // Simplified: Consider adding criteria to filter users if your database is large
+
     foreach ($users as $user) {
-        $user_credits = get_user_meta($user->ID, '_user_credits', true);
+        $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
         $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
-        if (!is_array($selected_postcode_areas)) {
-            $selected_postcode_areas = []; // Initialize as an empty array if not an array
-        }
-        foreach ($selected_postcode_areas as $region => $codes) {
-            foreach ($codes as $code) {
-                if (strpos($code, $postcode_prefix) === 0 && $user_credits > 0) {
-                    $eligible_recipients[] = $user->ID;
-                    break 2; // Break both loops as we only need to confirm the user once
+
+        // Check if user has credits and selected postcode areas
+        if ($user_credits > 0 && !empty($selected_postcode_areas)) {
+            foreach ($selected_postcode_areas as $region => $codes) {
+                foreach ($codes as $code) {
+                    if ($code === "*" || strpos($postcode_prefix, $code) === 0) {
+                        // User is eligible either by wildcard (*) or matching prefix
+                        $eligible_recipients[] = $user->ID;
+                        break 2; // Found a match, no need to check further codes or regions for this user
+                    }
                 }
             }
         }
     }
+
     return $eligible_recipients;
 }
 
-function deduct_credit_from_user($user_id) {
-    $credits = get_user_meta($user_id, '_user_credits', true);
-    $credits = intval($credits);
+// function process_lead_submission(WP_REST_Request $request) {
+//     // Assume validation of required parameters has already happened
+    
+//     // Extract lead data
+//     $lead_data = [
+//         'postcode' => sanitize_text_field($request->get_param('postcode')),
+//         // Additional lead details...
+//     ];
+    
+//     // Extract the first two characters of the lead's postcode
+//     $postcode_prefix = substr($lead_data['postcode'], 0, 2);
+    
+//     // Get eligible recipients based on the first two characters and their selected postcodes
+//     $eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix);
+    
+//     // No eligible recipients found
+//     if (empty($eligible_recipients)) {
+//         return new WP_REST_Response(['message' => 'No eligible recipients for this postcode'], 404);
+//     }
+    
+//     // For demonstration, choosing the first eligible recipient
+//     // In production, you would use a more complex logic like round-robin
+//     $recipient_id = $eligible_recipients[0];
+    
+//     // Deduct a credit from the chosen recipient and send the lead
+//     if (deduct_credit_from_user($recipient_id)) {
+//         // assign_lead_to_user($recipient_id, $lead_data);
+//         // send_lead_email_to_user($recipient_id, $lead_data);
+//         return new WP_REST_Response(['message' => 'Lead sent successfully to ' . $recipient_id], 200);
+//     } else {
+//         return new WP_REST_Response(['message' => 'Failed to send lead, user out of credits'], 500);
+//     }
+// }
 
-    if ($credits > 0) {
-        $credits--; // Deduct one credit
-        update_user_meta($user_id, '_user_credits', $credits);
-        return true; // Successfully deducted credit
-    }
+// function get_eligible_recipients_for_lead($postcode_prefix) {
+//     $eligible_recipients = [];
+//     // Retrieve users who selected postcodes that start with the same two characters
+//     $users = get_users();
+//     foreach ($users as $user) {
+//         $user_credits = get_user_meta($user->ID, '_user_credits', true);
+//         $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
+//         if (!is_array($selected_postcode_areas)) {
+//             $selected_postcode_areas = []; // Initialize as an empty array if not an array
+//         }
+//         foreach ($selected_postcode_areas as $region => $codes) {
+//             foreach ($codes as $code) {
+//                 if (strpos($code, $postcode_prefix) === 0 && $user_credits > 0) {
+//                     $eligible_recipients[] = $user->ID;
+//                     break 2; // Break both loops as we only need to confirm the user once
+//                 }
+//             }
+//         }
+//     }
+//     return $eligible_recipients;
+// }
 
-    return false; // User had no credits to deduct
-}
+// function deduct_credit_from_user($user_id) {
+//     $credits = get_user_meta($user_id, '_user_credits', true);
+//     $credits = intval($credits);
+
+//     if ($credits > 0) {
+//         $credits--; // Deduct one credit
+//         update_user_meta($user_id, '_user_credits', $credits);
+//         return true; // Successfully deducted credit
+//     }
+
+//     return false; // User had no credits to deduct
+// }
 
 // function get_eligible_recipients_for_lead($postcode_prefix) {
 //     $eligible_recipients = [];
