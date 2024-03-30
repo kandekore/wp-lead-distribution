@@ -27,20 +27,21 @@ function process_lead_submission(WP_REST_Request $request) {
 
 function get_eligible_recipients_for_lead($postcode_prefix) {
     $eligible_recipients = [];
-    $users = get_users(); // Simplified: Consider adding criteria to filter users if your database is large
+    $users = get_users(); // Consider refining this query based on your needs
 
     foreach ($users as $user) {
         $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
         $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
 
-        // Check if user has credits and selected postcode areas
         if ($user_credits > 0 && !empty($selected_postcode_areas)) {
             foreach ($selected_postcode_areas as $region => $codes) {
                 foreach ($codes as $code) {
-                    if ($code === "*" || strpos($postcode_prefix, $code) === 0) {
-                        // User is eligible either by wildcard (*) or matching prefix
+                    // Replace "#" with regex pattern to match any single digit
+                    $codePattern = str_replace("#", "[0-9]", $code);
+                    // Check if the lead's postcode prefix matches the customer's postcode pattern
+                    if (preg_match("/^$codePattern/", $postcode_prefix)) {
                         $eligible_recipients[] = $user->ID;
-                        break 2; // Found a match, no need to check further codes or regions for this user
+                        break 2; // Match found, no need to continue checking
                     }
                 }
             }
@@ -49,6 +50,7 @@ function get_eligible_recipients_for_lead($postcode_prefix) {
 
     return $eligible_recipients;
 }
+
 
 // function process_lead_submission(WP_REST_Request $request) {
 //     // Assume validation of required parameters has already happened
