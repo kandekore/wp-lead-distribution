@@ -63,3 +63,16 @@ add_action('woocommerce_order_status_completed', function($order_id) {
         }
     }
 }, 10, 1);
+add_action('woocommerce_product_options_general_product_data', function() {
+    woocommerce_wp_checkbox([
+        'id' => '_renew_on_credit_depletion',
+        'label' => __('Renew on Credit Depletion', 'text-domain'),
+        'desc_tip' => 'true',
+        'description' => __('Check this box to renew the subscription when user credits reach 5 or less.', 'text-domain'),
+    ]);
+});
+
+add_action('woocommerce_admin_process_product_object', function($product) {
+    $renew_on_credit_depletion = isset($_POST['_renew_on_credit_depletion']) ? 'yes' : 'no';
+    $product->update_meta_data('_renew_on_credit_depletion', $renew_on_credit_depletion);
+});
