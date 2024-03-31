@@ -58,7 +58,6 @@ function render_lead_management_dashboard() {
 /**
  * Render a custom admin page for managing postcode areas.
  */function render_custom_admin_page() {
-    
     // Enqueue jQuery UI for accordion if not already included
     wp_enqueue_script('jquery-ui-accordion');
 
@@ -94,8 +93,7 @@ function render_lead_management_dashboard() {
         echo '<div>'; // Start of accordion content
         echo "<label><input type='checkbox' class='region-select-all' data-region='" . esc_attr($region) . "'> Select All in " . esc_html($region) . "</label><br>";
         foreach ($codes as $code) {
-            $is_checked = in_array($code, $codes, true) ? 'checked="checked"' : '';
-            echo "<label><input type='checkbox' class='region " . esc_attr($region) . "' name='postcode_areas[" . esc_attr($region) . "][]' value='" . esc_attr($code) . "' $is_checked> " . esc_html($code) . "</label><br>";
+            echo "<label><input type='checkbox' class='region " . esc_attr($region) . "' name='postcode_areas[" . esc_attr($region) . "][]' value='" . esc_attr($code) . "'> " . esc_html($code) . "</label><br>";
         }
         echo '</div>'; // End of accordion content
     }
@@ -105,14 +103,21 @@ function render_lead_management_dashboard() {
     echo '<input type="submit" name="save_postcode_areas" value="Save Postcode Areas" class="button button-primary">';
     echo '</form></div>';
 
-    // Initialize the accordion feature
+    // Initialize the accordion feature and add select all functionality
     echo "<script>
     jQuery(document).ready(function($) {
         $('#postcode-accordion').accordion({
             collapsible: true,
             heightStyle: 'content'
         });
+        
+        // Select all functionality
+        $('.region-select-all').on('change', function() {
+            var checked = $(this).is(':checked');
+            $(this).closest('div').find('.region').prop('checked', checked);
+        });
     });
+    
     </script>";
 
     echo "<style>

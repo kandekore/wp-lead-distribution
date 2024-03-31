@@ -88,3 +88,153 @@ function enqueue_account_page_styles() {
     }
 }
 add_action('wp_enqueue_scripts', 'enqueue_account_page_styles');
+
+
+//CUSTOMER LEDS VIEW
+
+function add_leads_endpoint() {
+    add_rewrite_endpoint('leads', EP_ROOT | EP_PAGES);
+    add_rewrite_endpoint('lead-details', EP_ROOT | EP_PAGES);
+}
+
+add_action('init', 'add_leads_endpoint');
+
+function leads_endpoint_query_vars($vars) {
+    $vars[] = 'leads';
+    $vars[] = 'lead-details';
+    return $vars;
+}
+
+add_filter('query_vars', 'leads_endpoint_query_vars', 0);
+
+function add_leads_link_my_account($items) {
+    $logout = isset($items['customer-logout']) ? $items['customer-logout'] : null;
+    if($logout) {
+        unset($items['customer-logout']);
+        $items['leads'] = __('Your Leads', 'text-domain');
+        $items['customer-logout'] = $logout;
+    }
+    return $items;
+}
+
+add_filter('woocommerce_account_menu_items', 'add_leads_link_my_account');
+
+function leads_endpoint_content() {
+    // Form for filtering leads by date
+    echo '<form method="get" class="leads-date-filter">';
+    echo '<select name="date_filter">';
+    echo '<option value="all">All Dates</option>';
+    echo '<option value="today">Today</option>';
+    echo '<option value="yesterday">Yesterday</option>';
+    echo '<option value="this_week">This Week</option>';
+    echo '<option value="last_week">Last Week</option>';
+    echo '<option value="last_2_weeks">Last 2 Weeks</option>';
+    echo '<option value="last_3_weeks">Last 3 Weeks</option>';
+    echo '<option value="last_4_weeks">Last 4 Weeks</option>';
+    echo '</select>';
+    echo '<button type="submit">Filter</button>';
+    echo '</form>';
+
+    // Now, retrieve the selected date filter if one was submitted
+    $date_filter = isset($_GET['date_filter']) ? $_GET['date_filter'] : 'all';
+
+    // Fetch and display the leads according to the selected date filter
+    display_filtered_leads($date_filter);
+}
+
+add_action('woocommerce_account_leads_endpoint', 'leads_endpoint_content');
+
+function display_filtered_leads($date_filter) {
+    $user_id = get_current_user_id();
+    $args = [
+        'post_type' => 'lead',
+        'posts_per_page' => -1, // Adjust as needed
+        'author' => $user_id,
+        // Initialize 'date_query' to ensure it's always set
+        'date_query' => []
+    ];
+
+    // Adapted switch statement from 'apply_date_filter'
+    switch ($date_filter) {
+        case 'today':
+            $args['date_query'][] = ['year' => date('Y'), 'month' => date('m'), 'day' => date('d')];
+            break;
+        case 'yesterday':
+            $yesterday = strtotime('-1 day');
+            $args['date_query'][] = ['year' => date('Y', $yesterday), 'month' => date('m', $yesterday), 'day' => date('d', $yesterday)];
+            break;
+        case 'this_week':
+            $startOfWeek = date('Y-m-d', strtotime('this week'));
+            $endOfWeek = date('Y-m-d', strtotime('this week +6 days'));
+            $args['date_query'][] = ['after' => $startOfWeek, 'before' => $endOfWeek, 'inclusive' => true];
+            break;
+        case 'last_week':
+            $startOfLastWeek = date('Y-m-d', strtotime('last week'));
+            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
+            $args['date_query'][] = ['after' => $startOfLastWeek, 'before' => $endOfLastWeek, 'inclusive' => true];
+            break;
+        case 'last_2_weeks':
+            $startOfLast2Weeks = date('Y-m-d', strtotime('-2 weeks'));
+            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
+            $args['date_query'][] = ['after' => $startOfLast2Weeks, 'before' => $endOfLastWeek, 'inclusive' => true];
+            break;
+        case 'last_3_weeks':
+            $startOfLast3Weeks = date('Y-m-d', strtotime('-3 weeks'));
+            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
+            $args['date_query'][] = ['after' => $startOfLast3Weeks, 'before' => $endOfLastWeek, 'inclusive' => true];
+            break;
+        case 'last_4_weeks':
+            $startOfLast4Weeks = date('Y-m-d', strtotime('-4 weeks'));
+            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
+            $args['date_query'][] = ['after' => $startOfLast4Weeks, 'before' => $endOfLastWeek, 'inclusive' => true];
+            break;
+        // Ensure there's a case for 'all' or default to not apply any date query filter
+        case 'all':
+        default:
+            // No date query needed
+            break;
+    }
+
+    $leads_query = new WP_Query($args);
+
+    if ($leads_query->have_posts()) {
+        echo '<ul class="user-leads-list">';
+        while ($leads_query->have_posts()) {
+            $leads_query->the_post();
+            $lead_id = get_the_ID();
+            $lead_title = get_the_title();
+            $lead_time = get_the_date('F j, Y, g:i a'); // Adjust the format as needed
+            echo '<li><a href="' . esc_url( home_url('/my-account/lead-details/?lead_id=' . $lead_id) ) . '">' . esc_html($lead_title) . ' - ' . esc_html($lead_time) . '</a></li>';
+        }
+        echo '</ul>';
+    } else {
+        echo '<p>' . __('No leads found for the selected period.', 'text-domain') . '</p>';
+    }
+    wp_reset_postdata();
+}
+
+
+function lead_details_endpoint_content() {
+    // Directly getting lead_id from URL for debugging purposes
+    $lead_id = isset($_GET['lead_id']) ? intval($_GET['lead_id']) : 0;
+
+    if ($lead_id) {
+        $post = get_post($lead_id);
+        if ($post && $post->post_type === 'lead') {
+            // Check if the current user is the lead's author
+            if ($post->post_author == get_current_user_id()) {
+                echo '<h3>' . esc_html(get_the_title($lead_id)) . '</h3>';
+                echo '<p>' . wp_kses_post(get_the_content(null, false, $lead_id)) . '</p>';
+                // Optionally, display meta data and other details
+            } else {
+                echo '<p>' . __('You do not have permission to view this lead.', 'text-domain') . '</p>';
+            }
+        } else {
+            echo '<p>' . __('Lead not found.', 'text-domain') . '</p>';
+        }
+    } else {
+        echo '<p>' . __('No lead ID provided.', 'text-domain') . '</p>';
+    }
+}
+
+add_action('woocommerce_account_lead-details_endpoint', 'lead_details_endpoint_content');
