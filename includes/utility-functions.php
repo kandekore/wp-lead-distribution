@@ -120,8 +120,33 @@ function apply_date_filter(&$query, $filter_value) {
             $yesterday = strtotime('-1 day');
             $date_query = ['year' => date('Y', $yesterday), 'month' => date('m', $yesterday), 'day' => date('d', $yesterday)];
             break;
-        // Add cases for this_week, last_week, this_month, last_month
+        case 'this_week':
+            $startOfWeek = date('Y-m-d', strtotime('this week'));
+            $endOfWeek = date('Y-m-d', strtotime('this week +6 days'));
+            $date_query = ['after' => $startOfWeek, 'before' => $endOfWeek, 'inclusive' => true];
+            break;
+        case 'last_week':
+            $startOfLastWeek = date('Y-m-d', strtotime('last week'));
+            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
+            $date_query = ['after' => $startOfLastWeek, 'before' => $endOfLastWeek, 'inclusive' => true];
+            break;
+        case 'last_2_weeks':
+            $startOfLast2Weeks = date('Y-m-d', strtotime('-2 weeks'));
+            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
+            $date_query = ['after' => $startOfLast2Weeks, 'before' => $endOfLastWeek, 'inclusive' => true];
+            break;
+        case 'last_3_weeks':
+            $startOfLast3Weeks = date('Y-m-d', strtotime('-3 weeks'));
+            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
+            $date_query = ['after' => $startOfLast3Weeks, 'before' => $endOfLastWeek, 'inclusive' => true];
+            break;
+        case 'last_4_weeks':
+            $startOfLast4Weeks = date('Y-m-d', strtotime('-4 weeks'));
+            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
+            $date_query = ['after' => $startOfLast4Weeks, 'before' => $endOfLastWeek, 'inclusive' => true];
+            break;
     }
+    
     if ($date_query) {
         $query->set('date_query', [$date_query]);
     }
