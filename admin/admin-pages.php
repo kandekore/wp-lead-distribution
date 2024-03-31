@@ -56,11 +56,8 @@ function render_lead_management_dashboard() {
     // Dashboard content here
 }
 /**
- * Render a custom admin page for managing postcode areas.
- */function render_custom_admin_page() {
-    // Enqueue jQuery UI for accordion if not already included
-    wp_enqueue_script('jquery-ui-accordion');
-
+ * Render a custom admin page for managing postcode areas.*/
+function render_custom_admin_page() {
     // Nonce fields for security
     $nonce_action = 'save_postcode_areas_nonce_action';
     $nonce_name = 'save_postcode_areas_nonce';
@@ -79,80 +76,53 @@ function render_lead_management_dashboard() {
     }
 
     // Load the current saved or default postcode areas
-    $saved_postcode_areas = json_decode(get_option('custom_postcode_areas'), true) ?: [];
+    $postcode_areas = load_postcode_areas_from_json(); // Ensure this function returns an array
+    $saved_postcode_areas = json_decode(get_option('custom_postcode_areas', wp_json_encode($postcode_areas)), true);
+    if (!is_array($saved_postcode_areas)) {
+        $saved_postcode_areas = [];
+    }
 
     // Begin the form output
     echo '<div class="wrap"><h1>Manage Postcode Areas</h1><form method="post" action="">';
     wp_nonce_field($nonce_action, $nonce_name);
 
-    echo '<div id="postcode-accordion">'; // Start of accordion container
+    // Iterate through regions and codes, rendering checkboxes
+    foreach ($postcode_areas as $region => $codes) {
+      // Inside your foreach loop for regions in render_custom_admin_page
+echo "<h3>" . esc_html($region) . "</h3>";
+echo "<label><input type='checkbox' class='region-select-all' data-region='" . esc_attr($region) . "'> Select All in " . esc_html($region) . "</label><br>";
 
-    // Iterate through regions and codes, rendering checkboxes within accordion sections
-    foreach ($saved_postcode_areas as $region => $codes) {
-        echo '<h3>' . esc_html($region) . '</h3>';
-        echo '<div>'; // Start of accordion content
-        echo "<label><input type='checkbox' class='region-select-all' data-region='" . esc_attr($region) . "'> Select All in " . esc_html($region) . "</label><br>";
+        
         foreach ($codes as $code) {
-            echo "<label><input type='checkbox' class='region " . esc_attr($region) . "' name='postcode_areas[" . esc_attr($region) . "][]' value='" . esc_attr($code) . "'> " . esc_html($code) . "</label><br>";
+            $is_checked = in_array($code, $saved_postcode_areas[$region] ?? [], true) ? 'checked="checked"' : '';
+            echo "<label><input type='checkbox' class='region " . esc_attr($region) . "' name='postcode_areas[" . esc_attr($region) . "][]' value='" . esc_attr($code) . "' $is_checked> " . esc_html($code) . "</label><br>";
         }
-        echo '</div>'; // End of accordion content
     }
-
-    echo '</div>'; // End of accordion container
+    ?>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.region-select-all').forEach(function(selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', function() {
+                let region = this.getAttribute('data-region');
+                let checkboxes = document.querySelectorAll('input[name="postcode_areas['+region+'][]"]');
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = selectAllCheckbox.checked;
+                });
+            });
+        });
+    });
+</script>
+<?php
 
     echo '<input type="submit" name="save_postcode_areas" value="Save Postcode Areas" class="button button-primary">';
     echo '</form></div>';
-
-    // Initialize the accordion feature and add select all functionality
-    echo "<script>
-    jQuery(document).ready(function($) {
-        $('#postcode-accordion').accordion({
-            collapsible: true,
-            heightStyle: 'content'
-        });
-        
-        // Select all functionality
-        $('.region-select-all').on('change', function() {
-            var checked = $(this).is(':checked');
-            $(this).closest('div').find('.region').prop('checked', checked);
-        });
-    });
-    
-    </script>";
-
-    echo "<style>
-    #postcode-accordion .ui-accordion-header {
-        background-color: #0073aa;
-        color: #ffffff;
-        font-weight: bold;
-        padding: 10px 15px;
-        border-top: 1px solid #ffffff;
-    }
-    #postcode-accordion .ui-accordion-header.ui-state-active {
-        background-color: #005177;
-    }
-    #postcode-accordion .ui-accordion-header.ui-state-default {
-        background-color: #0073aa;
-    }
-    #postcode-accordion .ui-accordion-content {
-        background-color: #f1f1f1;
-        border: 1px solid #ddd;
-        padding: 15px;
-        margin-bottom: 10px;
-    }
-    .region-select-all {
-        margin-bottom: 10px;
-        display: inline-block;
-        font-weight: normal;
-    }
-    .region {
-        margin-left: 20px;
-        display: block;
-    }
-</style>";
-    
 }
 
+function enqueue_custom_admin_script() {
+    // Use get_template_directory_uri() for a theme or plugins_url() for a plugin.
+    wp_enqueue_script('custom-admin-js', get_template_directory_uri() . 'custom-admin.js', array('jquery', 'jquery-ui-accordion'), null, true);
+}
+add_action('admin_enqueue_scripts', 'enqueue_custom_admin_script');
 
 
 function render_user_credits_admin_page() {
