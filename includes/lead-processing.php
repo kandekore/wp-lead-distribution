@@ -93,6 +93,11 @@ function deduct_credit_from_user($user_id) {
     if ($credits > 0) {
         $credits--; // Deduct one credit
         update_user_meta($user_id, '_user_credits', $credits);
+         // Check if the credits are now 5 or less and renew subscription if necessary
+         if ($credits <= 5) {
+            check_credits_and_renew_subscription($user_id);
+        }
+        
         return true; // Successfully deducted credit
     }
 
