@@ -39,29 +39,103 @@ function check_credits_and_renew_subscription($user_id) {
     }
 }
 
+//anuj
+function renew_subscription_for_user_auto($user_id) {
 
-function renew_subscription_for_user($user_id) {
-    $subscriptions = wcs_get_subscriptions_for_customer($user_id, ['status' => 'active']);
+    $credits = (int) get_user_meta($user_id, '_user_credits', true);
 
-    foreach ($subscriptions as $subscription) {
-        // Assuming the renewal setting is on the parent product
-        $product_id = $subscription->get_parent_id();
-        $product = wc_get_product($product_id);
-        $renew_on_credit_depletion = $product ? $product->get_meta('_renew_on_credit_depletion') : '';
+    if ($credits <= 5) {
 
-        if ($renew_on_credit_depletion === 'yes') {
-            $renewal_order = wcs_create_renewal_order($subscription);
-            if ($renewal_order) {
-                $renewal_order->payment_complete();
-                $subscription->update_status('active');
-                // Log or notify about the renewal if needed.
-                break; // Remove or adjust based on whether you want to renew multiple subscriptions.
+        $subscriptions = wcs_get_users_subscriptions($user_id, ['status' => 'active']);
+        foreach ($subscriptions as $subscription) {
+            $orderinfo=wc_get_order($subscription->get_parent_id());
+            $items = $orderinfo->get_items();
+            $product_id=0;
+            if ( ! empty( $items ) ) {
+                foreach ( $items as $item ) {
+                    $product_id = $item->get_product_id();
+                }
             }
+            if($product_id>0){
+                $renew_on_credit_depletion = get_post_meta($product_id,'_renew_on_credit_depletion',true);
+                if ($renew_on_credit_depletion === 'yes') {
+                    $renewal_order = wcs_create_renewal_order($subscription);
+                    if ($renewal_order) {
+                        $renewal_order->payment_complete();
+                        $subscription->update_status('active');
+                        // Log or notify about the renewal if needed.
+                        break; // Remove or adjust based on whether you want to renew multiple subscriptions.
+                    }
+
+                }
+                
+            }
+
+        }
+    }
+
+}
+
+function renew_subscription_cron_job() {
+    if ( ! wp_next_scheduled( 'renew_subscription_cron_job_event' ) ) {
+        wp_schedule_event( time(), 'every_five_minutes', 'renew_subscription_cron_job_event' );
+    }
+}
+add_action( 'wp', 'renew_subscription_cron_job' );
+
+add_action( 'renew_subscription_cron_job_event', 'renew_subscription_cron_job_function' );
+
+function add_custom_cron_intervals( $schedules ) {
+    $schedules['every_five_minutes'] = array(
+        'interval' => 300, 
+        'display'  => esc_html__( 'Every 5 Minutes' ),
+    );
+    return $schedules;
+}
+add_filter( 'cron_schedules', 'add_custom_cron_intervals' );
+
+
+function renew_subscription_cron_job_function(){
+
+    //$users[] =  get_current_user_id();
+    $users = get_users(array(
+        'fields'  => 'ids', 
+    ));
+
+    if(count($users)>0){
+        foreach($users as $user_id){
+            renew_subscription_for_user_auto($user_id);
         }
     }
 }
 
-add_filter('woocommerce_payment_complete_order_status', 'custom_order_complete_status', 10, 2);
+////anuj
+
+
+// //no need this one use auto one
+// function renew_subscription_for_user($user_id) {
+//     $subscriptions = wcs_get_subscriptions_for_customer($user_id, ['status' => 'active']);
+
+//     foreach ($subscriptions as $subscription) {
+//         // Assuming the renewal setting is on the parent product
+//         $product_id = $subscription->get_parent_id();
+//         $product = wc_get_product($product_id);
+//         $renew_on_credit_depletion = $product ? $product->get_meta('_renew_on_credit_depletion') : '';
+
+//         if ($renew_on_credit_depletion === 'yes') {
+//             $renewal_order = wcs_create_renewal_order($subscription);
+//             if ($renewal_order) {
+//                 $renewal_order->payment_complete();
+//                 $subscription->update_status('active');
+//                 // Log or notify about the renewal if needed.
+//                 break; // Remove or adjust based on whether you want to renew multiple subscriptions.
+//             }
+//         }
+//     }
+// }
+// //no need this one use auto one
+
+// add_filter('woocommerce_payment_complete_order_status', 'custom_order_complete_status', 10, 2);
 
 function custom_order_complete_status($order_status, $order_id) {
     $order = wc_get_order($order_id);
