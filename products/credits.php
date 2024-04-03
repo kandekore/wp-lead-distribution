@@ -54,7 +54,7 @@ function renew_subscription_for_user_auto($user_id) {
 
     foreach ($subscriptions as $subscription) {
         // Check if the subscription is active.
-        if ($subscription->has_status('active')) {
+        if ($subscription->has_status('active') && !$subscription->is_manual()) {
             $order_info = wc_get_order($subscription->get_parent_id());
             if (!$order_info) {
                 continue; // Skip to the next subscription if the order info couldn't be fetched.
