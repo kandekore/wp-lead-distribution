@@ -23,7 +23,7 @@ function store_lead($lead_data, $user_id) {
     $user_display_name = $user_info ? $user_info->display_name : 'Unknown User';
     // Prepare post data
     $post_data = [
-        'post_title'    => wp_strip_all_tags($user_display_name . ' : ' . $lead_data['registration'] . ' -  ' . $lead_data['model'] . ' - ' . $lead_data['postcode']), // Use the car's registration as the post title for easy identification
+        'post_title'    => wp_strip_all_tags($lead_data['registration'] . ' -  ' . $lead_data['model'] ), // Use the car's registration as the post title for easy identification
         'post_content'  => wp_json_encode($lead_data), // Store all lead data as JSON in the post content
         'post_status'   => 'publish',
         'post_type'     => 'lead',
@@ -56,8 +56,9 @@ function store_lead($lead_data, $user_id) {
     // Check for errors
     if (is_wp_error($post_id)) {
         error_log('Failed to store lead: ' . $post_id->get_error_message());
-        // Handle error appropriately
+     
     }
+  
 }
 
 add_action('restrict_manage_posts', 'custom_lead_filters', 10, 2);

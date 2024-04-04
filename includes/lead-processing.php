@@ -3,6 +3,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;    
 function process_lead_submission(WP_REST_Request $request) {
     // Extract relevant data from the request
+  
     $lead_data = [
         'postcode' => sanitize_text_field($request->get_param('postcode')),
         'registration' => sanitize_text_field($request->get_param('reg')),
@@ -20,7 +21,6 @@ function process_lead_submission(WP_REST_Request $request) {
         'doors' => intval($request->get_param('doors')),
         'mot_due' => sanitize_text_field($request->get_param('mot_due')),
         'leadid' => sanitize_text_field($request->get_param('leadid')),
-        'vin' => sanitize_text_field($request->get_param('vin')),
         'resend' => sanitize_text_field($request->get_param('resend')),
     ];
     // $lead_id = store_lead($lead_data);
@@ -46,6 +46,8 @@ function process_lead_submission(WP_REST_Request $request) {
      if (is_wp_error($lead_id)) {
         return new WP_REST_Response(['message' => 'Failed to store lead'], 500);
     }
+   
+
     // Deduct a credit from the chosen recipient and send the lead
     if (deduct_credit_from_user($recipient_id)) {
         assign_lead_to_user($recipient_id, $lead_data, $lead_id);

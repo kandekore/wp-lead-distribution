@@ -83,6 +83,68 @@ function enqueue_account_page_styles() {
             .user-credits-info h3 {
                 color: #333;
             }
+            ul.user-leads-list {
+                list-style: none;
+                padding-left: 0px;
+            }
+            /* General table styles */
+            .user-leads-list {
+                width: 100%;
+                border-collapse: collapse;
+                background-color: #f9f9f9;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                font-family: Arial, sans-serif;
+            }
+            
+            /* Header row and cells */
+            .user-leads-list .header {
+                background-color: #007bff!important;
+                color: #ffffff;
+            }
+            
+            .user-leads-list th.theader {
+                padding: 10px;
+                border-bottom: 2px solid #ffffff;
+                text-align: left;
+            }
+            
+            /* Table rows and cells styling */
+            .user-leads-list .trow:nth-child(odd) {
+                background-color: #ffffff;
+            }
+            
+            .user-leads-list .trow:nth-child(even) {
+                background-color: #f2f2f2;
+            }
+            
+            .user-leads-list td.tcell {
+                padding: 8px;
+                border-bottom: 1px solid #dddddd;
+            }
+            
+            /* Button styling within the table */
+            .user-leads-list .butn .button {
+                display: inline-block;
+                padding: 5px 10px;
+                background-color: #28a745;
+                color: #ffffff;
+                text-decoration: none;
+                border-radius: 3px;
+                font-size: 14px;
+                transition: background-color 0.2s ease-in-out;
+            }
+            
+            .user-leads-list .butn .button:hover {
+                background-color: #218838;
+            }
+            
+            /* Style for when no leads are found */
+            .no-leads-found {
+                color: #dc3545;
+                font-family: Arial, sans-serif;
+                padding: 10px;
+            }
+            
         ";
         wp_add_inline_style('woocommerce-general', $custom_css);
     }
@@ -198,17 +260,32 @@ function display_filtered_leads($date_filter) {
     $leads_query = new WP_Query($args);
 
     if ($leads_query->have_posts()) {
-        echo '<ul class="user-leads-list">';
+        // Start the table and add a header row for the column titles
+        echo '<table class="user-leads-list">';
+        echo '<thead><tr class="header trow"><th class="theader">Lead ID</th><th class="theader">Lead Info</th><th class="theader">Date Received</th><th class="theader">More</th></tr></thead>';
+        echo '<tbody>';
         while ($leads_query->have_posts()) {
             $leads_query->the_post();
             $lead_id = get_the_ID();
             $lead_title = get_the_title();
             $lead_time = get_the_date('F j, Y, g:i a'); // Adjust the format as needed
-            echo '<li><a href="' . esc_url( home_url('/my-account/lead-details/?lead_id=' . $lead_id) ) . '">' . esc_html($lead_title) . ' - ' . esc_html($lead_time) . '</a></li>';
+            $leadid_meta = get_post_meta($lead_id, 'leadid', true);
+            // For each lead, create a row in the table
+            echo '<tr class="trow">';
+            echo '<td class="tcell">' . esc_html($leadid_meta) . '</td>';
+            // Column for Lead Info (title)
+            echo '<td class="tcell">' . esc_html($lead_title) . '</td>';
+            // Column for Date Received
+            echo '<td class="tcell">' . esc_html($lead_time) . '</td>';
+            // Column for 'More' button
+            // Note: 'More' button links to lead details. The esc_url() function is used for security to escape the URL properly.
+            echo '<td class="butn tcell"><a href="' . esc_url( home_url('/my-account/lead-details/?lead_id=' . $lead_id) ) . '" class="button">More</a></td>';
+            echo '</tr>';
         }
-        echo '</ul>';
-    } else {
-        echo '<p>' . __('No leads found for the selected period.', 'text-domain') . '</p>';
+        echo '</tbody>';
+        echo '</table>';
+    }else {
+        echo '<p class="no-leads-found">' . __('No leads found for the selected period.', 'text-domain') . '</p>';
     }
     wp_reset_postdata();
 }
@@ -223,7 +300,8 @@ function lead_details_endpoint_content() {
         if ($post && $post->post_type === 'lead') {
             // Check if the current user is the lead's author
             if ($post->post_author == get_current_user_id()) {
-                echo '<h3>' . esc_html(get_the_title($lead_id)) . '</h3>';
+                $leadid_meta = get_post_meta($lead_id, 'leadid', true);
+                echo '<h3>' . esc_html($leadid_meta) . '</h3>';
                 echo '<p>' . wp_kses_post(get_the_content(null, false, $lead_id)) . '</p>';
                 // Optionally, display meta data and other details
             } else {
