@@ -21,6 +21,7 @@ function process_lead_submission(WP_REST_Request $request) {
         'mot_due' => sanitize_text_field($request->get_param('mot_due')),
         'leadid' => sanitize_text_field($request->get_param('leadid')),
         'vin' => sanitize_text_field($request->get_param('vin')),
+        'resend' => sanitize_text_field($request->get_param('resend')),
     ];
     // $lead_id = store_lead($lead_data);
 

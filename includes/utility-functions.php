@@ -45,6 +45,7 @@ function store_lead($lead_data, $user_id) {
             'mot_due' => $lead_data['mot_due'], 
             'leadid' => $lead_data['leadid'],
             'vin' => $lead_data['vin'],
+            'resend' => $lead_data['resend'],
         ],
     ];
 
