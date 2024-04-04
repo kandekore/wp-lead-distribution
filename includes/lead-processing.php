@@ -118,12 +118,40 @@ function assign_lead_to_user($user_id, $lead_data, $lead_id) {
 function send_lead_email_to_user($user_id, $lead_data) {
     $user_info = get_userdata($user_id);
     $to = $user_info->user_email;
-    $subject = "New Lead: " . $lead_data['registration'];
-    $body = "You have a new lead. Here are the details:\n\n" . print_r($lead_data, true); // Customize this
+    $subject = "New Lead: " . $lead_data['leadid'];
+
+    // Start of the HTML email body
+    $body = "<html><body>";
+    $body .= "<h3>New Lead Details</h3>";
+    
+    // Assuming 'registration' and 'model' are important and should be highlighted
+    if (isset($lead_data['registration']) && isset($lead_data['model'])) {
+        $body .= "<h4>". esc_html($lead_data['leadid']) . " - ". esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
+    }
+
+    // Manually display selected meta data
+    $meta_keys = [
+        'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date', 
+        'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due', 
+        'vin'
+    ];
+
+    $body .= "<ul style='list-style-type:none;'>";
+    foreach ($meta_keys as $key) {
+        if (!empty($lead_data[$key])) { // Only display if value is not empty
+            $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>";
+        }
+    }
+    $body .= "</ul>";
+    
+    // End of the HTML email body
+    $body .= "</body></html>";
+
     $headers = ['Content-Type: text/html; charset=UTF-8'];
 
     return wp_mail($to, $subject, $body, $headers);
 }
+
 add_action('profile_update', 'update_user_postcode_queues', 10, 2);
 function update_user_postcode_queues($user_id, $old_user_data) {
     $selected_postcode_areas = json_decode(get_user_meta($user_id, 'selected_postcode_areas', true), true);
