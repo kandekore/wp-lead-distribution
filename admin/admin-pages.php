@@ -41,7 +41,14 @@ function register_my_plugin_menu_pages() {
         'regions-and-users-credits', // Menu slug
         'render_regions_and_users_admin_page' // Function to display the page content
     );
-
+    add_submenu_page(
+        'lead-management-dashboard',  // Parent slug
+        'Master Admin Settings',      // Page title
+        'Master Admin Settings',      // Menu title
+        'manage_options',             // Capability
+        'master-admin-settings',      // Menu slug
+        'master_admin_settings_page'  // Function to display the settings page
+    );
     // Remove the duplicate menu item for the main menu page.
     remove_submenu_page('lead-management-dashboard', 'lead-management-dashboard');
 }
@@ -49,6 +56,124 @@ function register_my_plugin_menu_pages() {
 // Hook into the 'admin_menu' action to register the menu pages
 add_action('admin_menu', 'register_my_plugin_menu_pages');
 
+add_action('admin_init', 'my_custom_plugin_settings');
+
+function my_custom_plugin_settings() {
+    // Register a new setting for "my custom plugin" page
+    register_setting('my-custom-plugin-settings', 'master_admin_settings');
+
+    // Register a new section in the "my custom plugin" page
+    add_settings_section(
+        'master_admin_section', 
+        'Master Admin Settings', 
+        'master_admin_section_cb', 
+        'my-custom-plugin'
+    );
+
+    // Register a new field for the section "master admin section"
+    add_settings_field(
+        'master_admin_function_enabled',
+        'Enable Master Admin Function',
+        'master_admin_function_enabled_cb',
+        'my-custom-plugin',
+        'master_admin_section'
+    );
+
+    // Master Admin Email
+    add_settings_field(
+        'master_admin_email',
+        'Master Admin Email',
+        'master_admin_email_cb',
+        'my-custom-plugin',
+        'master_admin_section'
+    );
+
+    // Master Admin Mobile
+    add_settings_field(
+        'master_admin_mobile',
+        'Master Admin Mobile',
+        'master_admin_mobile_cb',
+        'my-custom-plugin',
+        'master_admin_section'
+    );
+
+    // Master Admin User ID
+    add_settings_field(
+        'master_admin_user_id',
+        'Master Admin User ID',
+        'master_admin_user_id_cb',
+        'my-custom-plugin',
+        'master_admin_section'
+    );
+
+    // Minimum Year
+    add_settings_field(
+        'minimum_year',
+        'Minimum Year',
+        'minimum_year_cb',
+        'my-custom-plugin',
+        'master_admin_section'
+    );
+}
+
+function master_admin_section_cb() {
+    echo '<p>Settings for Master Admin functionality.</p>';
+}
+
+// Callback for "Enable Master Admin Function"
+function master_admin_function_enabled_cb() {
+    $options = get_option('master_admin_settings');
+    $checked = isset($options['master_admin_function_enabled']) ? checked(1, $options['master_admin_function_enabled'], false) : '';
+    echo '<input type="checkbox" id="master_admin_function_enabled" name="master_admin_settings[master_admin_function_enabled]" value="1"' . $checked . '>';
+}
+
+// Callback for "Master Admin Email"
+function master_admin_email_cb() {
+    $options = get_option('master_admin_settings');
+    $email = isset($options['master_admin_email']) ? $options['master_admin_email'] : '';
+    echo '<input type="email" id="master_admin_email" name="master_admin_settings[master_admin_email]" value="' . esc_attr($email) . '"/>';
+}
+
+// Callback for "Master Admin Mobile"
+function master_admin_mobile_cb() {
+    $options = get_option('master_admin_settings');
+    $mobile = isset($options['master_admin_mobile']) ? $options['master_admin_mobile'] : '';
+    echo '<input type="text" id="master_admin_mobile" name="master_admin_settings[master_admin_mobile]" value="' . esc_attr($mobile) . '"/>';
+}
+
+// Callback for "Master Admin User ID"
+function master_admin_user_id_cb() {
+    $options = get_option('master_admin_settings');
+    $user_id = isset($options['master_admin_user_id']) ? $options['master_admin_user_id'] : '';
+    echo '<input type="number" id="master_admin_user_id" name="master_admin_settings[master_admin_user_id]" value="' . esc_attr($user_id) . '"/>';
+}
+
+// Callback for "Minimum Year"
+function minimum_year_cb() {
+    $options = get_option('master_admin_settings');
+    $year = isset($options['minimum_year']) ? $options['minimum_year'] : '';
+    echo '<input type="number" id="minimum_year" name="master_admin_settings[minimum_year]" value="' . esc_attr($year) . '"/>';
+}
+
+
+function master_admin_settings_page() {
+    ?>
+    <div class="wrap">
+        <h2><?php echo esc_html(get_admin_page_title()); ?></h2>
+        <form action="options.php" method="post">
+            <?php
+            // Output security fields for the registered setting "my-custom-plugin-settings"
+            settings_fields('my-custom-plugin-settings');
+            // Output setting sections and their fields
+            // (sections are registered for "my-custom-plugin", each field is registered to a specific section)
+            do_settings_sections('my-custom-plugin');
+            // Output save settings button
+            submit_button('Save Settings');
+            ?>
+        </form>
+    </div>
+    <?php
+}
 
 // Define your page rendering functions below
 function render_lead_management_dashboard() {

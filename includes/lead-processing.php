@@ -5,8 +5,8 @@ function process_lead_submission(WP_REST_Request $request) {
     // Extract relevant data from the request
   
     $lead_data = [
-        'postcode' => sanitize_text_field($request->get_param('postcode')),
-        'registration' => sanitize_text_field($request->get_param('reg')),
+        'postcode' => strtoupper(sanitize_text_field($request->get_param('postcode'))),
+        'registration' => strtoupper(sanitize_text_field($request->get_param('reg'))),
         'model' => sanitize_text_field($request->get_param('model')),
         'date' => sanitize_text_field($request->get_param('date')),
         'cylinder' => sanitize_text_field($request->get_param('cylinder')),
@@ -22,6 +22,7 @@ function process_lead_submission(WP_REST_Request $request) {
         'mot_due' => sanitize_text_field($request->get_param('mot_due')),
         'leadid' => sanitize_text_field($request->get_param('leadid')),
         'resend' => sanitize_text_field($request->get_param('resend')),
+        'vin' => sanitize_text_field($request->get_param('vin')),
     ];
     // $lead_id = store_lead($lead_data);
 
@@ -29,6 +30,83 @@ function process_lead_submission(WP_REST_Request $request) {
 
     $postcode_prefix = substr($lead_data['postcode'], 0, 2);
     $eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix);
+
+     // Deserialize your settings array
+    // Deserialize your settings array
+    $settings = get_option('master_admin_settings');
+    if ($settings) {
+        $settings_array = maybe_unserialize($settings);
+
+        $master_admin_function_enabled = $settings_array["master_admin_function_enabled"];
+        $minimum_year = $settings_array["minimum_year"];
+        $master_admin_email = $settings_array["master_admin_email"];
+        $master_admin_user_id = $settings_array["master_admin_user_id"];
+// Assuming $lead_data contains all the necessary fields
+$rootURL = get_site_url();
+$apiEndpoint = "/wp-json/lead-management/v1/submit-lead?";
+$resendParam = "resend=true";
+
+// Construct the query parameters from $lead_data, excluding 'resend' and adding it at the end
+$queryParams = [];
+foreach ($lead_data as $key => $value) {
+    if ($key != 'resend') { // Exclude the resend parameter
+        $queryParams[] = $key . "=" . urlencode($value);
+    }
+}
+$queryString = implode("&", $queryParams) . "&" . $resendParam;
+
+// Complete API URL
+$apiURL = $rootURL . $apiEndpoint . $queryString;
+        if ($master_admin_function_enabled == "1" && !empty($minimum_year) && intval($lead_data['date']) > intval($minimum_year) && 
+        $lead_data['resend'] == "false") {
+            // Prepare and send email to Master Admin
+            // Prepare and send email to Master Admin
+$subject = "New Lead: " . $lead_data['leadid'];
+
+// Start of the HTML email body
+$body = "<html><body>";
+$body .= "<h3>New Lead Details for Master Admin</h3>";
+
+// Assuming 'registration' and 'model' are important and should be highlighted
+if (isset($lead_data['registration']) && isset($lead_data['model'])) {
+    $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
+}
+
+// Manually display selected meta data
+$meta_keys = [
+    'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date', 
+    'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due', 
+    'vin'
+];
+
+$body .= "<ul style='list-style-type:none;'>";
+foreach ($meta_keys as $key) {
+    if (!empty($lead_data[$key])) { // Only display if value is not empty
+        $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>";
+    }
+}
+$body .= "</ul>";
+$body .= "<p>To resend the lead, click <a href='" . esc_url($apiURL) . "'>here</a>.</p>";
+// End of the HTML email body
+$body .= "</body></html>";
+
+$headers = ['Content-Type: text/html; charset=UTF-8'];
+
+wp_mail($master_admin_email, $subject, $body, $headers);
+
+
+            // Assign lead to Master Admin user ID and store the lead
+            $lead_id = store_lead($lead_data, $master_admin_user_id);
+            assign_lead_to_user($master_admin_user_id, $lead_data, $lead_id);
+            if (!is_wp_error($lead_id)) {
+                return new WP_REST_Response(['message' => 'Lead sent successfully to Master Admin'], 200);
+            } else {
+                return new WP_REST_Response(['message' => 'Failed to store lead for Master Admin'], 500);
+            }
+        }
+    } else {
+        error_log('Master Admin settings not found or are incorrect.');
+    }
 
     // Output for testing: List of eligible recipient IDs
     echo "Eligible Recipients for Postcode Prefix {$postcode_prefix}: " . implode(', ', $eligible_recipients) . "<br>";
