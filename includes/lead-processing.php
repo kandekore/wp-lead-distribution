@@ -112,10 +112,46 @@ wp_mail($master_admin_email, $subject, $body, $headers);
     echo "Eligible Recipients for Postcode Prefix {$postcode_prefix}: " . implode(', ', $eligible_recipients) . "<br>";
 
     // No eligible recipients found
-    if (empty($eligible_recipients)) {
-        return new WP_REST_Response(['message' => 'No eligible recipients for this postcode'], 404);
-    }
     
+    if (empty($eligible_recipients)) {
+        $settings = get_option('fallback_settings');
+        if ($settings) {
+            $settings_array = maybe_unserialize($settings);
+    
+            if (!empty($settings_array['fallback_user_enabled']) && $settings_array['fallback_user_enabled'] == "1") {
+                $fallback_user_email = $settings_array['fallback_user_email'];
+                $fallback_user_id = $settings_array['fallback_user_id'];
+    
+                // Store and assign the lead to the fallback user
+                $lead_id = store_lead($lead_data, $fallback_user_id);
+                $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
+    
+                if (!is_wp_error($lead_id) && $result) {
+                    // Prepare and send email to Fallback User
+                    $subject = "New Lead Assignment: " . $lead_data['leadid'];
+                    $body = "<html><body>";
+                    $body .= "<h3>You've received a new lead as a fallback recipient.</h3>";
+                    $body .= "<p>Lead ID: " . esc_html($lead_data['leadid']) . "</p>";
+                    $body .= "<p>Please log in to view the details.</p>";
+                    $body .= "</body></html>";
+    
+                    $headers = ['Content-Type: text/html; charset=UTF-8'];
+                    
+                    if (wp_mail($fallback_user_email, $subject, $body, $headers)) {
+                    return new WP_REST_Response(['message' => 'Lead sent successfully to Fallback User and email notification sent.'], 200);
+                } else {
+                    // Handle case where email sending fails but lead is stored and assigned
+                    return new WP_REST_Response(['message' => 'Lead sent to Fallback User but failed to send email notification.'], 500);
+                }
+            } else {
+                return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User'], 500);
+            }
+        } else {
+            return new WP_REST_Response(['message' => 'No eligible recipients for this postcode and Fallback User is disabled'], 404);
+        }
+    }
+}
+
     // Randomly pick an eligible recipient from the array
     $random_key = array_rand($eligible_recipients);
     $recipient_id = $eligible_recipients[$random_key];
