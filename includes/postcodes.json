@@ -10,5 +10,6 @@
     "North East England": ["DH", "DL", "NE", "SR", "TS"],
     "Scotland": ["AB", "DD", "DG", "EH", "FK", "G#", "HS", "IV", "KA", "KW", "KY", "ML", "PA", "PH", "ZE"],
     "Wales": ["CF", "LD", "LL", "NP", "SA", "SY"],
-    "Northern Ireland": ["BT"]
+    "Northern Ireland": ["BT"],
+    "Testing": ["XX"]
 }

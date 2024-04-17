@@ -53,10 +53,13 @@ foreach ($lead_data as $key => $value) {
         $queryParams[] = $key . "=" . urlencode($value);
     }
 }
-$queryString = implode("&", $queryParams) . "&" . $resendParam;
+$queryString = implode("&", $queryParams);
+if (!empty($queryString)) {
+    $queryString .= "&";
+}
+$queryString .= $resendParam;
+$apiURL = $rootURL . $apiEndpoint . '?' . $queryString;
 
-// Complete API URL
-$apiURL = $rootURL . $apiEndpoint . $queryString;
         if ($master_admin_function_enabled == "1" && !empty($minimum_year) && intval($lead_data['date']) > intval($minimum_year) && 
         $lead_data['resend'] == "false") {
             // Prepare and send email to Master Admin
@@ -230,14 +233,23 @@ function assign_lead_to_user($user_id, $lead_data, $lead_id) {
     return true;
 }
 function send_lead_email_to_user($user_id, $lead_data) {
+    // Retrieve user's email address
     $user_info = get_userdata($user_id);
     $to = $user_info->user_email;
+
+    // Retrieve user's phone number from user meta data
+    $user_phone = get_user_meta($user_id, 'billing_phone', true);
+
+    // Construct the email address from the phone number
+    $phone_email = $user_phone . '@txtlocal.co.uk';
+
+    // Set the subject of the email
     $subject = "New Lead: " . $lead_data['leadid'];
 
     // Start of the HTML email body
     $body = "<html><body>";
     $body .= "<h3>New Lead Details</h3>";
-    
+
     // Assuming 'registration' and 'model' are important and should be highlighted
     if (isset($lead_data['registration']) && isset($lead_data['model'])) {
         $body .= "<h4>". esc_html($lead_data['leadid']) . " - ". esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
@@ -257,14 +269,20 @@ function send_lead_email_to_user($user_id, $lead_data) {
         }
     }
     $body .= "</ul>";
-    
+
     // End of the HTML email body
     $body .= "</body></html>";
 
-    $headers = ['Content-Type: text/html; charset=UTF-8'];
+    // Set headers for CC recipient
+    $headers = array(
+        'Content-Type: text/html; charset=UTF-8',
+        'Cc: ' . $phone_email // Include the CC recipient directly in the headers
+    );
 
+    // Send email using wp_mail(), specifying CC recipient in headers
     return wp_mail($to, $subject, $body, $headers);
 }
+
 
 add_action('profile_update', 'update_user_postcode_queues', 10, 2);
 function update_user_postcode_queues($user_id, $old_user_data) {

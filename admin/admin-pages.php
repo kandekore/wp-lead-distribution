@@ -199,7 +199,7 @@ function render_user_credits_admin_page() {
     if (isset($_POST['action'], $_POST['user_id']) && in_array($_POST['action'], ['add', 'subtract']) && check_admin_referer('update_user_credits_nonce')) {
         $user_id = intval($_POST['user_id']);
         $current_credits = intval(get_user_meta($user_id, '_user_credits', true));
-        $new_credits = $_POST['action'] === 'add' ? $current_credits + 10 : max($current_credits - 10, 0);
+        $new_credits = $_POST['action'] === 'add' ? $current_credits + 1 : max($current_credits - 1, 0);
         
         update_user_meta($user_id, '_user_credits', $new_credits);
         echo "<div class='notice notice-success'><p>User credits updated successfully.</p></div>";
@@ -233,14 +233,14 @@ function render_user_credits_admin_page() {
         wp_nonce_field('update_user_credits_nonce');
         echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
         echo '<input type="hidden" name="action" value="add">';
-        echo '<input type="submit" value="+10 Credits" class="button button-primary">';
+        echo '<input type="submit" value="+1 Credits" class="button button-primary">';
         echo '</form>';
 
         echo '<form method="post" action="" style="display: inline-block; margin-left: 10px;">';
         wp_nonce_field('update_user_credits_nonce');
         echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
         echo '<input type="hidden" name="action" value="subtract">';
-        echo '<input type="submit" value="-10 Credits" class="button">';
+        echo '<input type="submit" value="-1 Credits" class="button">';
         echo '</form>';
         echo '</td></tr>';
     }
