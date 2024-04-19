@@ -1,6 +1,6 @@
 
 document.addEventListener('DOMContentLoaded', function() {
-    const addButton = document.getElementById('add-postcode-area'); // Assume you have this button in your form
+    const addButton = document.getElementById('add-postcode-area'); 
     const container = document.getElementById('postcode-areas-container'); // A container where your postcode inputs reside
 
     addButton.addEventListener('click', function(e) {

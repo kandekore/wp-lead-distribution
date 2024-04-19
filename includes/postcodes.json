@@ -8,7 +8,7 @@
     "Yorkshire and the Humber": ["BD", "DN", "HD", "HG", "HU", "HX", "LS", "S#", "WF", "YO"],
     "North West England": ["BB", "BL", "CA", "CH", "CW", "FY", "L#", "LA", "M#", "OL", "PR", "SK", "WA", "WN"],
     "North East England": ["DH", "DL", "NE", "SR", "TS"],
-    "Scotland": ["AB", "DD", "DG", "EH", "FK", "G#", "HS", "IV", "KA", "KW", "KY", "ML", "PA", "PH", "ZE"],
+    "Scotland": ["AB", "DD", "DG", "EH", "FK", "G#", "HS", "IV", "KA", "KW", "KY", "ML", "PA", "PH", "ZE", "TD"],
     "Wales": ["CF", "LD", "LL", "NP", "SA", "SY"],
     "Northern Ireland": ["BT"],
     "Testing": ["XX"]

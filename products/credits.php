@@ -1,4 +1,5 @@
 <?php
+ if ( ! defined( 'ABSPATH' ) ) exit;    
 
 function decrement_user_credits($user_id) {
     $credits = (int) get_user_meta($user_id, '_user_credits', true);
@@ -25,9 +26,6 @@ function check_credits_and_renew_subscription($user_id) {
             if ($subscription->can_be_renewed_early()) {
                 // Get the renewal order
                 $renewal_order = wcs_create_renewal_order($subscription);
-
-                // Redirect to the payment process for the renewal order, or handle payment programmatically
-                // This step depends on your specific requirements and setup
 
                 // Log or notify as needed
                 error_log("Early renewal initiated for subscription {$subscription->get_id()} for user {$user_id}.");
@@ -82,19 +80,16 @@ function renew_subscription_for_user_auto($user_id) {
                         
                         $renewal_status=$renewal_order->get_status();
 
-                        // Failed early renewals won't place the subscription on-hold so delete unsuccessful early renewal orders and redirect the user to complete the payment via checkout.
-                        //if ( $renewal_order->needs_payment() ) {
+                   
                             if ( $renewal_status == 'failed' ) {
                             
                                 //$renewal_order->delete( true );
                             
                                 $renewal_order->add_order_note('Payment for the renewal order was unsuccessful with your payment method on file, please try again.');
 
-                            //wc_add_notice( __( 'Payment for the renewal order was unsuccessful with your payment method on file, please try again.', 'woocommerce-subscriptions' ), 'error' );
                             
                             update_user_meta($user_id,'renewal_payment_failed',date("Y-m-d H:i:s"));
 
-                            //wp_redirect( wcs_get_early_renewal_url( $subscription ) );
 
                             exit();
                         } else {
@@ -107,10 +102,7 @@ function renew_subscription_for_user_auto($user_id) {
 
                             $renewal_order->add_order_note('Your early renewal order was successful.');
 
-                            //wc_add_notice( __( 'Your early renewal order was successful.', 'woocommerce-subscriptions' ), 'success' );
                         }
-                        //$renewal_order->payment_complete();
-                        // Optionally, log or notify about the successful renewal.
                         break 2; // Exit both the inner and outer loops.
                     }
                 }
@@ -119,7 +111,7 @@ function renew_subscription_for_user_auto($user_id) {
     }
 
     if (!$eligibleForRenewal) {
-        // Optionally, log or handle the scenario where no eligible active subscription was found.
+        $renewal_order->add_order_note('No Active Subscriptiopns Found.');
     }
 }
 
@@ -145,7 +137,6 @@ add_filter( 'cron_schedules', 'add_custom_cron_intervals' );
 
 function renew_subscription_cron_job_function(){
 
-    //$users[] =  get_current_user_id();
     $users = get_users(array(
         'fields'  => 'ids', 
     ));
@@ -160,7 +151,6 @@ function renew_subscription_cron_job_function(){
                 $currentDate = new DateTime();
                 $interval = $date->diff($currentDate);
                 
-                //$totalHours = $interval->h;
 
                 $totalHours = $interval->h + ($interval->days * 24);
 
@@ -179,30 +169,6 @@ function renew_subscription_cron_job_function(){
 
 ////anuj
 
-
-//no need this one use auto one
-function renew_subscription_for_user($user_id) {
-    $subscriptions = wcs_get_subscriptions_for_customer($user_id, ['status' => 'active']);
-
-    foreach ($subscriptions as $subscription) {
-        // Assuming the renewal setting is on the parent product
-        $product_id = $subscription->get_parent_id();
-        $product = wc_get_product($product_id);
-        $renew_on_credit_depletion = $product ? $product->get_meta('_renew_on_credit_depletion') : '';
-
-        if ($renew_on_credit_depletion === 'yes') {
-            $renewal_order = wcs_create_renewal_order($subscription);
-            if ($renewal_order) {
-                $renewal_order->payment_complete();
-                $subscription->update_status('active');
-                // Log or notify about the renewal if needed.
-                break; // Remove or adjust based on whether you want to renew multiple subscriptions.
-            }
-        }
-    }
-}
-//no need this one use auto one
-
 add_filter('woocommerce_payment_complete_order_status', 'custom_order_complete_status', 10, 2);
 
 function custom_order_complete_status($order_status, $order_id) {
@@ -213,10 +179,6 @@ function custom_order_complete_status($order_status, $order_id) {
         // Set subscription renewal orders to "completed"
         return 'completed';
     }
-
-    // For regular orders, check if you want to auto-complete them
-    // This example checks if it's not a subscription order (to avoid duplicating logic)
-    // You might want to include additional logic here depending on your requirements
     if (!function_exists('wcs_order_contains_subscription') || !wcs_order_contains_subscription($order)) {
         return 'completed';
     }

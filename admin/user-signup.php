@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;    
 
 add_action('woocommerce_after_order_notes', 'add_custom_postcode_selection_to_checkout');
 function add_custom_postcode_selection_to_checkout($checkout) {
@@ -44,7 +45,6 @@ function add_custom_postcode_selection_to_checkout($checkout) {
 }
 
 
-// add_action('woocommerce_checkout_update_order_meta', 'save_custom_postcode_selection');
 add_action('woocommerce_checkout_update_order_meta', 'save_custom_postcode_selection');
 function save_custom_postcode_selection($order_id) {
     // Directly access $_POST data for selected postcode areas

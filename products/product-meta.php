@@ -1,4 +1,5 @@
 <?php
+ if ( ! defined( 'ABSPATH' ) ) exit;    
 
 // Display the credit field
 add_action('woocommerce_product_options_general_product_data', function() {
@@ -27,7 +28,7 @@ add_action('woocommerce_subscription_status_active', function($subscription) {
         $product = $item->get_product();
         if ($product && $product->get_meta('_credits')) {
             $credits = (int) $product->get_meta('_credits');
-            update_user_meta($user_id, '_user_credits', $credits); // Assuming you store credits in '_user_credits' user meta
+            update_user_meta($user_id, '_user_credits', $credits); 
         }
     }
 });

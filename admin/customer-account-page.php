@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;    
 
 function add_areas_endpoint() {
     add_rewrite_endpoint('areas', EP_ROOT | EP_PAGES);

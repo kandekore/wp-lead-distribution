@@ -63,14 +63,12 @@ $apiURL = $rootURL . $apiEndpoint . $queryString;
         if ($master_admin_function_enabled == "1" && !empty($minimum_year) && intval($lead_data['date']) > intval($minimum_year) && 
         $lead_data['resend'] == "false") {
             // Prepare and send email to Master Admin
-            // Prepare and send email to Master Admin
 $subject = "New Lead: " . $lead_data['leadid'];
 
 // Start of the HTML email body
 $body = "<html><body>";
 $body .= "<h3>New Lead Details for Master Admin</h3>";
 
-// Assuming 'registration' and 'model' are important and should be highlighted
 if (isset($lead_data['registration']) && isset($lead_data['model'])) {
     $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
 }
@@ -178,11 +176,10 @@ wp_mail($master_admin_email, $subject, $body, $headers);
 }
 
 
-    // For testing, simply return a success message without actual WP_REST_Response
 
 function get_eligible_recipients_for_lead($postcode_prefix) {
     $eligible_recipients = [];
-    $users = get_users(); // Consider refining this query based on your needs
+    $users = get_users(); 
 
     foreach ($users as $user) {
         $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
@@ -228,7 +225,6 @@ function deduct_credit_from_user($user_id) {
 
 
 function assign_lead_to_user($user_id, $lead_data, $lead_id) {
-    // Example of associating a lead post with a user. Adjust according to your storage method.
     update_post_meta($lead_id, 'assigned_user', $user_id);
     return true;
 }
@@ -314,7 +310,6 @@ function process_lead_submission_with_lock(WP_REST_Request $request) {
 
     set_transient($lock_key, true, $lock_timeout);
 
-    // [Process lead submission logic goes here]
 
     // Release lock
     delete_transient($lock_key);
