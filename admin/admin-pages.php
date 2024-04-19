@@ -1,54 +1,123 @@
 <?php
 include_once plugin_dir_path(__FILE__) . '../includes/load-postcodes.php';
 function register_my_plugin_menu_pages() {
-    // Add the main menu page
-    add_menu_page(
-        'Lead Management', // Page title
-        'Lead Management', // Menu title
-        'manage_options', // Capability
-        'lead-management-dashboard', // Menu slug
-        'render_lead_management_dashboard', // Function to display the dashboard page content
-        'dashicons-admin-site', // Icon URL
-        6 // Position
-    );
+    add_menu_page('Lead Management', 'Lead Management', 'manage_options', 'lead-management-dashboard', 'render_lead_management_dashboard', 'dashicons-admin-site', 6);
 
-    // Add submenu for Managing Postcode Areas
-    add_submenu_page(
-        'lead-management-dashboard', // Parent slug
-        'Manage Postcode Areas', // Page title
-        'Postcode Areas', // Menu title
-        'manage_options', // Capability
-        'manage-postcode-areas', // Menu slug
-        'render_custom_admin_page' // Function to display the page content
-    );
+    add_submenu_page('lead-management-dashboard', 'Manage Postcode Areas', 'Postcode Areas', 'manage_options', 'manage-postcode-areas', 'render_custom_admin_page');
+    add_submenu_page('lead-management-dashboard', 'User Credits Management', 'User Credits', 'manage_options', 'user-credits-management', 'render_user_credits_admin_page');
+    add_submenu_page('lead-management-dashboard', 'Regions and Users with Credits', 'Regions & Users', 'manage_options', 'regions-and-users-credits', 'render_regions_and_users_admin_page');
+    add_submenu_page('lead-management-dashboard', 'Master Admin Settings', 'Master Admin Settings', 'manage_options', 'master-admin-settings', 'master_admin_settings_page');
+    add_submenu_page('lead-management-dashboard', 'Fallback User Settings', 'Fallback User Settings', 'manage_options', 'fallback-user-settings', 'render_fallback_user_settings_page');
 
-    // Add submenu for User Credits Management
-    add_submenu_page(
-        'lead-management-dashboard', // Parent slug
-        'User Credits Management', // Page title
-        'User Credits', // Menu title
-        'manage_options', // Capability
-        'user-credits-management', // Menu slug
-        'render_user_credits_admin_page' // Function to display the page content
-    );
-
-    // Add submenu for Regions and Users with Credits
-    add_submenu_page(
-        'lead-management-dashboard', // Parent slug
-        'Regions and Users with Credits', // Page title
-        'Regions & Users', // Menu title
-        'manage_options', // Capability
-        'regions-and-users-credits', // Menu slug
-        'render_regions_and_users_admin_page' // Function to display the page content
-    );
-
-    // Remove the duplicate menu item for the main menu page.
     remove_submenu_page('lead-management-dashboard', 'lead-management-dashboard');
 }
 
-// Hook into the 'admin_menu' action to register the menu pages
 add_action('admin_menu', 'register_my_plugin_menu_pages');
+add_action('admin_init', 'register_my_custom_plugin_settings');
 
+function register_my_custom_plugin_settings() {
+    register_setting('custom_fallback_settings', 'fallback_settings');
+    add_settings_section('fallback_user_section', 'Fallback User Settings', 'fallback_user_section_cb', 'fallback-user-settings');
+    
+    add_settings_field('fallback_user_enabled', 'Enable Fallback User', 'fallback_user_enabled_cb', 'fallback-user-settings', 'fallback_user_section');
+    add_settings_field('fallback_user_email', 'Fallback User Email', 'fallback_user_email_cb', 'fallback-user-settings', 'fallback_user_section');
+    add_settings_field('fallback_user_mobile', 'Fallback User Mobile', 'fallback_user_mobile_cb', 'fallback-user-settings', 'fallback_user_section');
+    add_settings_field('fallback_user_id', 'Fallback User ID', 'fallback_user_id_cb', 'fallback-user-settings', 'fallback_user_section');
+
+    register_setting('my-custom-plugin-settings', 'master_admin_settings');
+    add_settings_section('master_admin_section', 'Master Admin Settings', 'master_admin_section_cb', 'master-admin-settings');
+    
+    add_settings_field('master_admin_function_enabled', 'Enable Master Admin Function', 'master_admin_function_enabled_cb', 'master-admin-settings', 'master_admin_section');
+    add_settings_field('master_admin_email', 'Master Admin Email', 'master_admin_email_cb', 'master-admin-settings', 'master_admin_section');
+    add_settings_field('master_admin_mobile', 'Master Admin Mobile', 'master_admin_mobile_cb', 'master-admin-settings', 'master_admin_section');
+    add_settings_field('master_admin_user_id', 'Master Admin User ID', 'master_admin_user_id_cb', 'master-admin-settings', 'master_admin_section');
+    add_settings_field('minimum_year', 'Minimum Year', 'minimum_year_cb', 'master-admin-settings', 'master_admin_section');
+}
+
+function master_admin_section_cb() {
+    echo '<p>Settings for Master Admin functionality.</p>';
+}
+
+// Callback for "Enable Master Admin Function"
+function master_admin_function_enabled_cb() {
+    $options = get_option('master_admin_settings');
+    $checked = isset($options['master_admin_function_enabled']) ? checked(1, $options['master_admin_function_enabled'], false) : '';
+    echo '<input type="checkbox" id="master_admin_function_enabled" name="master_admin_settings[master_admin_function_enabled]" value="1"' . $checked . '>';
+}
+
+// Callback for "Master Admin Email"
+function master_admin_email_cb() {
+    $options = get_option('master_admin_settings');
+    $email = isset($options['master_admin_email']) ? $options['master_admin_email'] : '';
+    echo '<input type="email" id="master_admin_email" name="master_admin_settings[master_admin_email]" value="' . esc_attr($email) . '"/>';
+}
+
+// Callback for "Master Admin Mobile"
+function master_admin_mobile_cb() {
+    $options = get_option('master_admin_settings');
+    $mobile = isset($options['master_admin_mobile']) ? $options['master_admin_mobile'] : '';
+    echo '<input type="text" id="master_admin_mobile" name="master_admin_settings[master_admin_mobile]" value="' . esc_attr($mobile) . '"/>';
+}
+
+// Callback for "Master Admin User ID"
+function master_admin_user_id_cb() {
+    $options = get_option('master_admin_settings');
+    $user_id = isset($options['master_admin_user_id']) ? $options['master_admin_user_id'] : '';
+    echo '<input type="number" id="master_admin_user_id" name="master_admin_settings[master_admin_user_id]" value="' . esc_attr($user_id) . '"/>';
+}
+
+// Callback for "Minimum Year"
+function minimum_year_cb() {
+    $options = get_option('master_admin_settings');
+    $year = isset($options['minimum_year']) ? $options['minimum_year'] : '';
+    echo '<input type="number" id="minimum_year" name="master_admin_settings[minimum_year]" value="' . esc_attr($year) . '"/>';
+}
+
+function fallback_user_section_cb() {
+    echo '<p>Settings for the Fallback User who receives leads when no other recipients are available.</p>';
+}
+
+function fallback_user_enabled_cb() {
+    $options = get_option('fallback_settings');
+    $checked = isset($options['fallback_user_enabled']) ? checked(1, $options['fallback_user_enabled'], false) : '';
+    echo '<input type="checkbox" id="fallback_user_enabled" name="fallback_settings[fallback_user_enabled]" value="1"' . $checked . '>';
+}
+
+function fallback_user_email_cb() {
+    $options = get_option('fallback_settings');
+    $email = isset($options['fallback_user_email']) ? $options['fallback_user_email'] : '';
+    echo '<input type="email" id="fallback_user_email" name="fallback_settings[fallback_user_email]" value="' . esc_attr($email) . '"/>';
+}
+
+function fallback_user_mobile_cb() {
+    $options = get_option('fallback_settings');
+    $mobile = isset($options['fallback_user_mobile']) ? $options['fallback_user_mobile'] : '';
+    echo '<input type="text" id="fallback_user_mobile" name="fallback_settings[fallback_user_mobile]" value="' . esc_attr($mobile) . '"/>';
+}
+
+function fallback_user_id_cb() {
+    $options = get_option('fallback_settings');
+    $user_id = isset($options['fallback_user_id']) ? $options['fallback_user_id'] : '';
+    echo '<input type="number" id="fallback_user_id" name="fallback_settings[fallback_user_id]" value="' . esc_attr($user_id) . '"/>';
+}
+
+// Inside your existing my_custom_plugin_settings function, add the following:
+
+function master_admin_settings_page() {
+    echo '<div class="wrap"><h2>' . esc_html(get_admin_page_title()) . '</h2><form action="options.php" method="post">';
+    settings_fields('my-custom-plugin-settings');
+    do_settings_sections('master-admin-settings');
+    submit_button('Save Settings');
+    echo '</form></div>';
+}
+
+function render_fallback_user_settings_page() {
+    echo '<div class="wrap"><h2>' . esc_html(get_admin_page_title()) . '</h2><form action="options.php" method="post">';
+    settings_fields('custom_fallback_settings');
+    do_settings_sections('fallback-user-settings');
+    submit_button('Save Settings');
+    echo '</form></div>';
+}
 
 // Define your page rendering functions below
 function render_lead_management_dashboard() {
@@ -130,7 +199,7 @@ function render_user_credits_admin_page() {
     if (isset($_POST['action'], $_POST['user_id']) && in_array($_POST['action'], ['add', 'subtract']) && check_admin_referer('update_user_credits_nonce')) {
         $user_id = intval($_POST['user_id']);
         $current_credits = intval(get_user_meta($user_id, '_user_credits', true));
-        $new_credits = $_POST['action'] === 'add' ? $current_credits + 10 : max($current_credits - 10, 0);
+        $new_credits = $_POST['action'] === 'add' ? $current_credits + 1 : max($current_credits - 1, 0);
         
         update_user_meta($user_id, '_user_credits', $new_credits);
         echo "<div class='notice notice-success'><p>User credits updated successfully.</p></div>";
@@ -164,14 +233,14 @@ function render_user_credits_admin_page() {
         wp_nonce_field('update_user_credits_nonce');
         echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
         echo '<input type="hidden" name="action" value="add">';
-        echo '<input type="submit" value="+10 Credits" class="button button-primary">';
+        echo '<input type="submit" value="+1 Credits" class="button button-primary">';
         echo '</form>';
 
         echo '<form method="post" action="" style="display: inline-block; margin-left: 10px;">';
         wp_nonce_field('update_user_credits_nonce');
         echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
         echo '<input type="hidden" name="action" value="subtract">';
-        echo '<input type="submit" value="-10 Credits" class="button">';
+        echo '<input type="submit" value="-1 Credits" class="button">';
         echo '</form>';
         echo '</td></tr>';
     }

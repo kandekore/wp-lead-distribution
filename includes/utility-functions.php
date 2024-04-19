@@ -173,3 +173,58 @@ function enqueue_admin_scripts() {
     }
 }
 add_action('admin_footer', 'enqueue_admin_scripts');
+
+
+add_filter('manage_lead_posts_columns', 'add_custom_lead_columns');
+function add_custom_lead_columns($columns) {
+    // Add new columns
+    $columns['leadid'] = __('Lead ID');
+    $columns['postcode'] = __('Postcode');
+    $columns['post_author'] = __('Agent');
+
+    return $columns;
+}
+
+add_action('manage_lead_posts_custom_column', 'custom_lead_column_content', 10, 2);
+function custom_lead_column_content($column_name, $post_id) {
+    switch ($column_name) {
+        case 'leadid':
+            echo get_post_meta($post_id, 'leadid', true);
+            break;
+        case 'postcode':
+            echo get_post_meta($post_id, 'postcode', true);
+            break;
+        case 'post_author':
+            $author_id = get_post_field('post_author', $post_id);
+            $author = get_user_by('id', $author_id);
+            echo $author ? $author->user_login : __('Unknown');
+            break;
+    }
+}
+
+add_filter('posts_search', 'search_lead_id_in_admin', 10, 2);
+function search_lead_id_in_admin($search, $wp_query) {
+    global $wpdb;
+    if (!is_admin()) return $search;
+    if (!$wp_query->is_search) return $search;
+    if (!isset($wp_query->query['post_type']) || 'lead' != $wp_query->query['post_type']) return $search;
+
+    $search_terms = $wp_query->query_vars['s'];
+    $search_terms = $wpdb->_escape($search_terms);
+
+    if (empty($search_terms)) return $search;
+
+    $search = " AND (";
+    $search .= "$wpdb->posts.post_title LIKE '%$search_terms%'";
+    $search .= " OR $wpdb->posts.post_content LIKE '%$search_terms%'";
+    $search .= " OR EXISTS (";
+    $search .= "     SELECT * FROM $wpdb->postmeta";
+    $search .= "     WHERE post_id = $wpdb->posts.ID";
+    $search .= "     AND meta_key = 'leadid'";
+    $search .= "     AND meta_value LIKE '%$search_terms%'";
+    $search .= " )";
+    $search .= ") ";
+
+    return $search;
+}
+

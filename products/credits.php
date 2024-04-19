@@ -70,7 +70,46 @@ function renew_subscription_for_user_auto($user_id) {
                     // Renew the subscription since both conditions are met.
                     $renewal_order = wcs_create_renewal_order($subscription);
                     if ($renewal_order) {
-                        $renewal_order->payment_complete();
+                        $renewal_order->set_payment_method( wc_get_payment_gateway_by_order( $subscription ) );
+                        $renewal_order->update_meta_data( '_subscription_renewal_early', $subscription->get_id() );
+                        $renewal_order->save();
+                
+                        // Attempt to collect payment with the subscription's current payment method.
+                        WC_Subscriptions_Payment_Gateways::trigger_gateway_renewal_payment_hook( $renewal_order );
+                
+                        // Now that we've attempted to process the payment, refresh the order.
+                        $renewal_order = wc_get_order( $renewal_order->get_id() );
+                        
+                        $renewal_status=$renewal_order->get_status();
+
+                        // Failed early renewals won't place the subscription on-hold so delete unsuccessful early renewal orders and redirect the user to complete the payment via checkout.
+                        //if ( $renewal_order->needs_payment() ) {
+                            if ( $renewal_status == 'failed' ) {
+                            
+                                //$renewal_order->delete( true );
+                            
+                                $renewal_order->add_order_note('Payment for the renewal order was unsuccessful with your payment method on file, please try again.');
+
+                            //wc_add_notice( __( 'Payment for the renewal order was unsuccessful with your payment method on file, please try again.', 'woocommerce-subscriptions' ), 'error' );
+                            
+                            update_user_meta($user_id,'renewal_payment_failed',date("Y-m-d H:i:s"));
+
+                            //wp_redirect( wcs_get_early_renewal_url( $subscription ) );
+
+                            exit();
+                        } else {
+                            // Trigger the subscription payment complete hooks and reset suspension counts and user roles.
+                            $subscription->payment_complete();
+                            
+                            delete_user_meta($user_id,'renewal_payment_failed');
+
+                            wcs_update_dates_after_early_renewal( $subscription, $renewal_order );
+
+                            $renewal_order->add_order_note('Your early renewal order was successful.');
+
+                            //wc_add_notice( __( 'Your early renewal order was successful.', 'woocommerce-subscriptions' ), 'success' );
+                        }
+                        //$renewal_order->payment_complete();
                         // Optionally, log or notify about the successful renewal.
                         break 2; // Exit both the inner and outer loops.
                     }
@@ -113,7 +152,27 @@ function renew_subscription_cron_job_function(){
 
     if(count($users)>0){
         foreach($users as $user_id){
-            renew_subscription_for_user_auto($user_id);
+
+            $renewal_process=true;
+            $renewal_date_exists=get_user_meta($user_id,'renewal_payment_failed',true);
+            if(!empty($renewal_date_exists)){
+                $date = new DateTime($renewal_date_exists);
+                $currentDate = new DateTime();
+                $interval = $date->diff($currentDate);
+                
+                //$totalHours = $interval->h;
+
+                $totalHours = $interval->h + ($interval->days * 24);
+
+                if ($totalHours < 24) { //24 set hours here 
+                    $renewal_process=false;
+                }
+            }
+
+            if($renewal_process==true){
+                renew_subscription_for_user_auto($user_id);
+            }
+
         }
     }
 }
