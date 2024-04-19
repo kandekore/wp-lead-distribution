@@ -58,7 +58,7 @@ if (!empty($queryString)) {
     $queryString .= "&";
 }
 $queryString .= $resendParam;
-$apiURL = $rootURL . $apiEndpoint . '?' . $queryString;
+$apiURL = $rootURL . $apiEndpoint . $queryString;
 
         if ($master_admin_function_enabled == "1" && !empty($minimum_year) && intval($lead_data['date']) > intval($minimum_year) && 
         $lead_data['resend'] == "false") {
