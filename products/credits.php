@@ -1,5 +1,22 @@
 <?php
- if ( ! defined( 'ABSPATH' ) ) exit;    
+ if ( ! defined( 'ABSPATH' ) ) exit;   
+ 
+ // Function to send email notification
+function send_credit_notification($user_id, $subject, $message) {
+    $user_info = get_userdata($user_id);
+    $to = $user_info->user_email;
+    $headers = ['Content-Type: text/html; charset=UTF-8'];
+
+    wp_mail($to, $subject, $message, $headers);
+}
+
+// Function to notify admin
+function notify_admin($subject, $message) {
+    $admin_email = get_option('admin_email');
+    $headers = ['Content-Type: text/html; charset=UTF-8'];
+
+    wp_mail($admin_email, $subject, $message, $headers);
+}
 
 function decrement_user_credits($user_id) {
     $credits = (int) get_user_meta($user_id, '_user_credits', true);
@@ -7,9 +24,22 @@ function decrement_user_credits($user_id) {
         $credits--;
         update_user_meta($user_id, '_user_credits', $credits);
         
-        // Check if credits have reached the renewal threshold
-        if ($credits <= 5) { // Changed to less than or equal to 5
+        if ($credits <= 0) {
+            $subject = 'Your Credits Have Reached Zero';
+            $message = 'Dear user, your credits have reached zero. Please renew your subscription.';
+            send_credit_notification($user_id, $subject, $message);
+            notify_admin('User Credits Reached Zero', 'User ID ' . $user_id . ' has zero credits.');
+        } elseif ($credits <= 5) {
+            $subject = 'Your Credits Are Low (5 or Less)';
+            $message = 'Dear user, your credits are 5 or less. Please renew your subscription soon.';
+            send_credit_notification($user_id, $subject, $message);
+            notify_admin('User Credits Low (5 or Less)', 'User ID ' . $user_id . ' has 5 or less credits.');
             renew_subscription_for_user($user_id);
+        } elseif ($credits <= 10) {
+            $subject = 'Your Credits Are Low (10 or Less)';
+            $message = 'Dear user, your credits are 10 or less. Consider renewing your subscription.';
+            send_credit_notification($user_id, $subject, $message);
+            notify_admin('User Credits Low (10 or Less)', 'User ID ' . $user_id . ' has 10 or less credits.');
         }
     }
 }
@@ -185,4 +215,21 @@ function custom_order_complete_status($order_status, $order_id) {
     
     // Return the default status for any other cases
     return $order_status;
+}
+// Hook into subscription status changes to notify admin and users
+add_action('woocommerce_subscription_status_updated', 'notify_subscription_status_change', 10, 3);
+
+function notify_subscription_status_change($subscription, $old_status, $new_status) {
+    $user_id = $subscription->get_user_id();
+    
+    if ($new_status == 'active') {
+        send_credit_notification($user_id, 'Subscription Renewed', 'Dear user, your subscription has been renewed.');
+        notify_admin('Subscription Renewed', 'User ID ' . $user_id . ' had their subscription renewed.');
+    } elseif ($new_status == 'cancelled') {
+        send_credit_notification($user_id, 'Subscription Cancelled', 'Dear user, your subscription has been cancelled.');
+        notify_admin('Subscription Cancelled', 'User ID ' . $user_id . ' had their subscription cancelled.');
+    } elseif ($new_status == 'failed') {
+        send_credit_notification($user_id, 'Subscription Renewal Failed', 'Dear user, your subscription renewal payment has failed. Please update your payment method.');
+        notify_admin('Subscription Renewal Failed', 'User ID ' . $user_id . ' had a renewal payment failure.');
+    }
 }
