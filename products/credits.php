@@ -1,13 +1,17 @@
 <?php
  if ( ! defined( 'ABSPATH' ) ) exit;   
  
- // Function to send email notification
+// Function to send email notification
 function send_credit_notification($user_id, $subject, $message) {
     $user_info = get_userdata($user_id);
     $to = $user_info->user_email;
     $headers = ['Content-Type: text/html; charset=UTF-8'];
 
-    wp_mail($to, $subject, $message, $headers);
+    if (wp_mail($to, $subject, $message, $headers)) {
+        error_log("Email sent to user $user_id with subject: $subject");
+    } else {
+        error_log("Failed to send email to user $user_id with subject: $subject");
+    }
 }
 
 // Function to notify admin
@@ -15,7 +19,11 @@ function notify_admin($subject, $message) {
     $admin_email = get_option('admin_email');
     $headers = ['Content-Type: text/html; charset=UTF-8'];
 
-    wp_mail($admin_email, $subject, $message, $headers);
+    if (wp_mail($admin_email, $subject, $message, $headers)) {
+        error_log("Email sent to admin with subject: $subject");
+    } else {
+        error_log("Failed to send email to admin with subject: $subject");
+    }
 }
 
 function decrement_user_credits($user_id) {
