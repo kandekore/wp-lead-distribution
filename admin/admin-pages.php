@@ -1,7 +1,4 @@
 <?php
-if ( ! defined( 'ABSPATH' ) ) exit;    
-
-
 include_once plugin_dir_path(__FILE__) . '../includes/load-postcodes.php';
 function register_my_plugin_menu_pages() {
     add_menu_page('Lead Management', 'Lead Management', 'manage_options', 'lead-management-dashboard', 'render_lead_management_dashboard', 'dashicons-admin-site', 6);

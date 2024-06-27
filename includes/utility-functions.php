@@ -80,6 +80,7 @@ function custom_lead_filters($post_type, $which) {
     </select>
     <?php
 
+    // Assuming 'assigned_user' corresponds to WP user IDs
     wp_dropdown_users([
         'show_option_all' => __('All Agents'),
         'name' => 'assigned_user',

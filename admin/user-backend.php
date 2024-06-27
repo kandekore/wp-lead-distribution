@@ -1,5 +1,5 @@
 <?php
-if ( ! defined( 'ABSPATH' ) ) exit;    
+// Enqueue necessary scripts and styles for the accordion
 function enqueue_custom_admin_scripts($hook) {
     if ('user-edit.php' !== $hook && 'profile.php' !== $hook && 'post.php' !== $hook && 'edit.php' !== $hook) {
         return;

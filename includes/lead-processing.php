@@ -53,15 +53,13 @@ foreach ($lead_data as $key => $value) {
         $queryParams[] = $key . "=" . urlencode($value);
     }
 }
-$queryString = implode("&", $queryParams);
-if (!empty($queryString)) {
-    $queryString .= "&";
-}
-$queryString .= $resendParam;
-$apiURL = $rootURL . $apiEndpoint . $queryString;
+$queryString = implode("&", $queryParams) . "&" . $resendParam;
 
+// Complete API URL
+$apiURL = $rootURL . $apiEndpoint . $queryString;
         if ($master_admin_function_enabled == "1" && !empty($minimum_year) && intval($lead_data['date']) > intval($minimum_year) && 
         $lead_data['resend'] == "false") {
+            // Prepare and send email to Master Admin
             // Prepare and send email to Master Admin
 $subject = "New Lead: " . $lead_data['leadid'];
 
@@ -69,6 +67,7 @@ $subject = "New Lead: " . $lead_data['leadid'];
 $body = "<html><body>";
 $body .= "<h3>New Lead Details for Master Admin</h3>";
 
+// Assuming 'registration' and 'model' are important and should be highlighted
 if (isset($lead_data['registration']) && isset($lead_data['model'])) {
     $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
 }
@@ -176,10 +175,11 @@ wp_mail($master_admin_email, $subject, $body, $headers);
 }
 
 
+    // For testing, simply return a success message without actual WP_REST_Response
 
 function get_eligible_recipients_for_lead($postcode_prefix) {
     $eligible_recipients = [];
-    $users = get_users(); 
+    $users = get_users(); // Consider refining this query based on your needs
 
     foreach ($users as $user) {
         $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
@@ -223,8 +223,29 @@ function deduct_credit_from_user($user_id) {
     return false; // User had no credits to deduct
 }
 
+function check_credits_and_renew_subscription($user_id) {
+    $subscriptions = wcs_get_users_subscriptions($user_id);
+
+    foreach ($subscriptions as $subscription) {
+        if ($subscription->has_status('active') && $subscription->get_meta('_renew_on_credit_depletion') === 'yes') {
+            // Check if the early renewal can be initiated
+            if ($subscription->can_be_renewed_early()) {
+                // Get the renewal order
+                $renewal_order = wcs_create_renewal_order($subscription);
+
+                // Log or notify as needed
+                error_log("Early renewal initiated for subscription {$subscription->get_id()} for user {$user_id}.");
+
+                // Break if only renewing one subscription
+                break;
+            }
+        }
+    }
+}
+
 
 function assign_lead_to_user($user_id, $lead_data, $lead_id) {
+    // Example of associating a lead post with a user. Adjust according to your storage method.
     update_post_meta($lead_id, 'assigned_user', $user_id);
     return true;
 }
@@ -310,6 +331,7 @@ function process_lead_submission_with_lock(WP_REST_Request $request) {
 
     set_transient($lock_key, true, $lock_timeout);
 
+    // [Process lead submission logic goes here]
 
     // Release lock
     delete_transient($lock_key);

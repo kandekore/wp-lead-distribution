@@ -1,7 +1,4 @@
 <?php
-if ( ! defined( 'ABSPATH' ) ) exit;    
-
-
 // Load postcode areas from JSON
 function load_postcode_areas_from_json() {
     $json_path = plugin_dir_path(__FILE__) . 'postcodes.json'; 
