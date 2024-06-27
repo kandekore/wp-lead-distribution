@@ -5,7 +5,19 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 function send_credit_notification($user_id, $subject, $message) {
     $user_info = get_userdata($user_id);
     $to = $user_info->user_email;
-    $headers = ['Content-Type: text/html; charset=UTF-8'];
+
+   
+
+    // Retrieve user's phone number from user meta data
+    $user_phone = get_user_meta($user_id, 'billing_phone', true);
+
+    // Construct the email address from the phone number
+    $phone_email = $user_phone . '@txtlocal.co.uk';
+
+    $headers = array(
+        'Content-Type: text/html; charset=UTF-8',
+        'Cc: ' . $phone_email // Include the CC recipient directly in the headers
+    );
 
     // Create a structured HTML email body
     $body = "<html><body>";
