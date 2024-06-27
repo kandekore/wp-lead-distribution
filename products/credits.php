@@ -88,11 +88,11 @@ function check_user_credits_daily() {
         if ($has_active_subscription) {
             if ($credits > 5 && $credits <= 10) {
                 $subject = 'Credit Warning: Less than 10 credits';
-                $message = "Dear user, you have $credits credits left. Please note that if you have auto-renewal set, your credits will be automatically renewed when they fall below 5 credits. If not, you will need to manually renew your subscription.";
+                $message = "You have $credits credits left. Please note that if you have auto-renewal set, your credits will be automatically renewed when they fall below 5 credits. If not, you will need to manually renew your subscription.";
                 send_credit_notification($user_id, $subject, $message);
             } elseif ($credits > 10) {
                 $subject = 'Credit Balance Notification';
-                $message = "Dear user, you have $credits credits left. If you have auto-renewal set, your credits will be automatically renewed when they fall below 5 credits. If not, you will need to manually renew your subscription.";
+                $message = "You have $credits credits left. If you have auto-renewal set, your credits will be automatically renewed when they fall below 5 credits. If not, you will need to manually renew your subscription.";
                 send_credit_notification($user_id, $subject, $message);
             }
         }
