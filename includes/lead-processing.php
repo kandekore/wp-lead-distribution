@@ -112,7 +112,7 @@ wp_mail($master_admin_email, $subject, $body, $headers);
     echo "Eligible Recipients for Postcode Prefix {$postcode_prefix}: " . implode(', ', $eligible_recipients) . "<br>";
 
      // No eligible recipients found
-     if (empty($eligible_recipients)) {
+       if (empty($eligible_recipients)) {
         $settings = get_option('fallback_settings');
         if ($settings) {
             $settings_array = maybe_unserialize($settings);
@@ -123,7 +123,6 @@ wp_mail($master_admin_email, $subject, $body, $headers);
 
             if ($fallback_user_enabled) {
                 if ($fallback_api_endpoint) {
-                    // Prepare data with original field names for the API endpoint
                     $api_lead_data = [
                         'postcode' => $lead_data['postcode'],
                         'reg' => $lead_data['registration'],
@@ -145,7 +144,6 @@ wp_mail($master_admin_email, $subject, $body, $headers);
                         'vin' => $lead_data['vin'],
                     ];
 
-                    // Send the lead to the fallback user API endpoint
                     $response = wp_remote_post($fallback_api_endpoint, [
                         'body' => json_encode($api_lead_data),
                         'headers' => [
@@ -154,40 +152,31 @@ wp_mail($master_admin_email, $subject, $body, $headers);
                     ]);
 
                     if (is_wp_error($response)) {
-                        error_log('Error sending lead to Fallback User API: ' . $response->get_error_message());
                         return new WP_REST_Response(['message' => 'Failed to send lead to Fallback User API'], 500);
                     }
 
-                    $response_code = wp_remote_retrieve_response_code($response);
-                    $response_body = wp_remote_retrieve_body($response);
+                    $api_response_body = wp_remote_retrieve_body($response);
+                    $subject = "API Response for Lead ID: " . $lead_data['leadid'];
+                    $body = "API Response: " . $api_response_body;
 
-                    // Log response for debugging
-                    error_log('Fallback API Response Code: ' . $response_code);
-                    error_log('Fallback API Response Body: ' . $response_body);
+                    wp_mail($fallback_user_email, $subject, $body, ['Content-Type: text/plain; charset=UTF-8']);
 
-                    $subject = "Fallback API Response for Lead ID: " . $lead_data['leadid'];
-                    $body = "<html><body>";
-                    $body .= "<h3>Response from Fallback API</h3>";
-                    $body .= "<p><strong>API Response:</strong> " . esc_html($response_body) . "</p>";
-                    $body .= "</body></html>";
-                    $headers = ['Content-Type: text/html; charset=UTF-8'];
-
-                    wp_mail($fallback_user_email, $subject, $body, $headers);
-
-                    return new WP_REST_Response(['message' => 'Lead sent successfully to Fallback User API'], 200);
+                    $lead_id = store_lead($lead_data, $fallback_user_id);
+                    $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
+                    if (!is_wp_error($lead_id) && $result) {
+                        return new WP_REST_Response(['message' => 'Lead sent successfully to Fallback User API and stored'], 200);
+                    } else {
+                        return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User'], 500);
+                    }
                 } else {
-                    // Store and assign the lead to the fallback user
                     $lead_id = store_lead($lead_data, $fallback_user_id);
                     $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
 
                     if (!is_wp_error($lead_id) && $result) {
-                        // Prepare and send email to Fallback User
                         $subject = "New Lead Assignment: " . $lead_data['leadid'];
-                        $body = "<html><body>";
-                        $body .= "<h3>You've received a new lead as a fallback recipient.</h3>";
+                        $body = "<html><body><h3>You've received a new lead as a fallback recipient.</h3>";
                         $body .= "<p>Lead ID: " . esc_html($lead_data['leadid']) . "</p>";
-                        $body .= "<p>Please log in to view the details.</p>";
-                        $body .= "</body></html>";
+                        $body .= "<p>Please log in to view the details.</p></body></html>";
 
                         $headers = ['Content-Type: text/html; charset=UTF-8'];
 
@@ -265,16 +254,50 @@ function deduct_credit_from_user($user_id) {
     if ($credits > 0) {
         $credits--; // Deduct one credit
         update_user_meta($user_id, '_user_credits', $credits);
-         // Check if the credits are now 5 or less and renew subscription if necessary
-         if ($credits <= 5) {
+
+        // Check if the credits are now zero or less and handle subscription cancellation if necessary
+        if ($credits <= 0) {
+            cancel_user_subscription($user_id);
+            send_credit_depletion_email($user_id);
+        } elseif ($credits <= 5) {
             check_credits_and_renew_subscription($user_id);
         }
-        
+
         return true; // Successfully deducted credit
     }
 
     return false; // User had no credits to deduct
 }
+
+function cancel_user_subscription($user_id) {
+    $subscriptions = wcs_get_users_subscriptions($user_id);
+
+    foreach ($subscriptions as $subscription) {
+        if ($subscription->has_status('active')) {
+            $subscription->update_status('cancelled');
+            error_log("Subscription {$subscription->get_id()} for user {$user_id} has been cancelled due to zero credits.");
+            break;
+        }
+    }
+}
+
+function send_credit_depletion_email($user_id) {
+    $user_info = get_userdata($user_id);
+    $to = $user_info->user_email;
+
+    $subject = "Your Credits Have Been Depleted";
+    $body = "<html><body>";
+    $body .= "<h3>Your Credits Have Been Depleted</h3>";
+    $body .= "<p>Dear " . esc_html($user_info->display_name) . ",</p>";
+    $body .= "<p>Your account has run out of credits, and your subscription has been cancelled. Please renew your subscription to continue receiving leads.</p>";
+    $body .= "<p>Thank you for using our service.</p>";
+    $body .= "</body></html>";
+
+    $headers = ['Content-Type: text/html; charset=UTF-8'];
+
+    wp_mail($to, $subject, $body, $headers);
+}
+
 
 function check_credits_and_renew_subscription($user_id) {
     $subscriptions = wcs_get_users_subscriptions($user_id);
