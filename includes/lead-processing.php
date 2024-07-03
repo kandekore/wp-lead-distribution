@@ -111,47 +111,101 @@ wp_mail($master_admin_email, $subject, $body, $headers);
     // Output for testing: List of eligible recipient IDs
     echo "Eligible Recipients for Postcode Prefix {$postcode_prefix}: " . implode(', ', $eligible_recipients) . "<br>";
 
-    // No eligible recipients found
-    
-    if (empty($eligible_recipients)) {
+     // No eligible recipients found
+     if (empty($eligible_recipients)) {
         $settings = get_option('fallback_settings');
         if ($settings) {
             $settings_array = maybe_unserialize($settings);
-    
-            if (!empty($settings_array['fallback_user_enabled']) && $settings_array['fallback_user_enabled'] == "1") {
-                $fallback_user_email = $settings_array['fallback_user_email'];
-                $fallback_user_id = $settings_array['fallback_user_id'];
-    
-                // Store and assign the lead to the fallback user
-                $lead_id = store_lead($lead_data, $fallback_user_id);
-                $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
-    
-                if (!is_wp_error($lead_id) && $result) {
-                    // Prepare and send email to Fallback User
-                    $subject = "New Lead Assignment: " . $lead_data['leadid'];
+            $fallback_user_enabled = !empty($settings_array['fallback_user_enabled']) && $settings_array['fallback_user_enabled'] == "1";
+            $fallback_user_email = $settings_array['fallback_user_email'];
+            $fallback_user_id = $settings_array['fallback_user_id'];
+            $fallback_api_endpoint = $settings_array['fallback_user_api_endpoint'];
+
+            if ($fallback_user_enabled) {
+                if ($fallback_api_endpoint) {
+                    // Prepare data with original field names for the API endpoint
+                    $api_lead_data = [
+                        'postcode' => $lead_data['postcode'],
+                        'reg' => $lead_data['registration'],
+                        'model' => $lead_data['model'],
+                        'date' => $lead_data['date'],
+                        'cylinder' => $lead_data['cylinder'],
+                        'colour' => $lead_data['colour'],
+                        'keepers' => $lead_data['keepers'],
+                        'contact' => $lead_data['contact'],
+                        'email' => $lead_data['email'],
+                        'info' => $lead_data['info'],
+                        'fuel' => $lead_data['fuel'],
+                        'mot' => $lead_data['mot'],
+                        'trans' => $lead_data['trans'],
+                        'doors' => $lead_data['doors'],
+                        'mot_due' => $lead_data['mot_due'],
+                        'leadid' => $lead_data['leadid'],
+                        'resend' => $lead_data['resend'],
+                        'vin' => $lead_data['vin'],
+                    ];
+
+                    // Send the lead to the fallback user API endpoint
+                    $response = wp_remote_post($fallback_api_endpoint, [
+                        'body' => json_encode($api_lead_data),
+                        'headers' => [
+                            'Content-Type' => 'application/json',
+                        ],
+                    ]);
+
+                    if (is_wp_error($response)) {
+                        return new WP_REST_Response(['message' => 'Failed to send lead to Fallback User API'], 500);
+                    }
+
+                    // Process the response from the fallback user API
+                    $api_response_body = wp_remote_retrieve_body($response);
+                    $api_response = json_decode($api_response_body, true);
+
+                    // Prepare and send email to Fallback User with the API response
+                    $subject = "New Lead Assignment via API: " . $lead_data['leadid'];
                     $body = "<html><body>";
-                    $body .= "<h3>You've received a new lead as a fallback recipient.</h3>";
+                    $body .= "<h3>You've received a new lead via the fallback API endpoint.</h3>";
                     $body .= "<p>Lead ID: " . esc_html($lead_data['leadid']) . "</p>";
-                    $body .= "<p>Please log in to view the details.</p>";
+                    $body .= "<p>API Response: " . esc_html(print_r($api_response, true)) . "</p>";
                     $body .= "</body></html>";
-    
+
                     $headers = ['Content-Type: text/html; charset=UTF-8'];
-                    
+
                     if (wp_mail($fallback_user_email, $subject, $body, $headers)) {
-                    return new WP_REST_Response(['message' => 'Lead sent successfully to Fallback User and email notification sent.'], 200);
+                        return new WP_REST_Response(['message' => 'Lead sent successfully to Fallback User API and email notification sent.'], 200);
+                    } else {
+                        return new WP_REST_Response(['message' => 'Lead sent to Fallback User API but failed to send email notification.'], 500);
+                    }
                 } else {
-                    // Handle case where email sending fails but lead is stored and assigned
-                    return new WP_REST_Response(['message' => 'Lead sent to Fallback User but failed to send email notification.'], 500);
+                    // Store and assign the lead to the fallback user
+                    $lead_id = store_lead($lead_data, $fallback_user_id);
+                    $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
+
+                    if (!is_wp_error($lead_id) && $result) {
+                        // Prepare and send email to Fallback User
+                        $subject = "New Lead Assignment: " . $lead_data['leadid'];
+                        $body = "<html><body>";
+                        $body .= "<h3>You've received a new lead as a fallback recipient.</h3>";
+                        $body .= "<p>Lead ID: " . esc_html($lead_data['leadid']) . "</p>";
+                        $body .= "<p>Please log in to view the details.</p>";
+                        $body .= "</body></html>";
+
+                        $headers = ['Content-Type: text/html; charset=UTF-8'];
+
+                        if (wp_mail($fallback_user_email, $subject, $body, $headers)) {
+                            return new WP_REST_Response(['message' => 'Lead sent successfully to Fallback User and email notification sent.'], 200);
+                        } else {
+                            return new WP_REST_Response(['message' => 'Lead sent to Fallback User but failed to send email notification.'], 500);
+                        }
+                    } else {
+                        return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User'], 500);
+                    }
                 }
             } else {
-                return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User'], 500);
+                return new WP_REST_Response(['message' => 'No eligible recipients for this postcode and Fallback User is disabled'], 404);
             }
-        } else {
-            return new WP_REST_Response(['message' => 'No eligible recipients for this postcode and Fallback User is disabled'], 404);
         }
     }
-}
-
     // Randomly pick an eligible recipient from the array
     $random_key = array_rand($eligible_recipients);
     $recipient_id = $eligible_recipients[$random_key];

@@ -23,6 +23,7 @@ function register_my_custom_plugin_settings() {
     add_settings_field('fallback_user_email', 'Fallback User Email', 'fallback_user_email_cb', 'fallback-user-settings', 'fallback_user_section');
     add_settings_field('fallback_user_mobile', 'Fallback User Mobile', 'fallback_user_mobile_cb', 'fallback-user-settings', 'fallback_user_section');
     add_settings_field('fallback_user_id', 'Fallback User ID', 'fallback_user_id_cb', 'fallback-user-settings', 'fallback_user_section');
+    add_settings_field('fallback_user_api_endpoint', 'Fallback User API Endpoint', 'fallback_user_api_endpoint_cb', 'fallback-user-settings', 'fallback_user_section');
 
     register_setting('my-custom-plugin-settings', 'master_admin_settings');
     add_settings_section('master_admin_section', 'Master Admin Settings', 'master_admin_section_cb', 'master-admin-settings');
@@ -34,6 +35,11 @@ function register_my_custom_plugin_settings() {
     add_settings_field('minimum_year', 'Minimum Year', 'minimum_year_cb', 'master-admin-settings', 'master_admin_section');
 }
 
+function fallback_user_api_endpoint_cb() {
+    $options = get_option('fallback_settings');
+    $endpoint = isset($options['fallback_user_api_endpoint']) ? $options['fallback_user_api_endpoint'] : '';
+    echo '<input type="url" id="fallback_user_api_endpoint" name="fallback_settings[fallback_user_api_endpoint]" value="' . esc_attr($endpoint) . '"/>';
+}
 function master_admin_section_cb() {
     echo '<p>Settings for Master Admin functionality.</p>';
 }
