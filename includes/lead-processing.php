@@ -154,28 +154,27 @@ wp_mail($master_admin_email, $subject, $body, $headers);
                     ]);
 
                     if (is_wp_error($response)) {
+                        error_log('Error sending lead to Fallback User API: ' . $response->get_error_message());
                         return new WP_REST_Response(['message' => 'Failed to send lead to Fallback User API'], 500);
                     }
 
-                    // Process the response from the fallback user API
-                    $api_response_body = wp_remote_retrieve_body($response);
-                    $api_response = json_decode($api_response_body, true);
+                    $response_code = wp_remote_retrieve_response_code($response);
+                    $response_body = wp_remote_retrieve_body($response);
 
-                    // Prepare and send email to Fallback User with the API response
-                    $subject = "New Lead Assignment via API: " . $lead_data['leadid'];
+                    // Log response for debugging
+                    error_log('Fallback API Response Code: ' . $response_code);
+                    error_log('Fallback API Response Body: ' . $response_body);
+
+                    $subject = "Fallback API Response for Lead ID: " . $lead_data['leadid'];
                     $body = "<html><body>";
-                    $body .= "<h3>You've received a new lead via the fallback API endpoint.</h3>";
-                    $body .= "<p>Lead ID: " . esc_html($lead_data['leadid']) . "</p>";
-                    $body .= "<p>API Response: " . esc_html(print_r($api_response, true)) . "</p>";
+                    $body .= "<h3>Response from Fallback API</h3>";
+                    $body .= "<p><strong>API Response:</strong> " . esc_html($response_body) . "</p>";
                     $body .= "</body></html>";
-
                     $headers = ['Content-Type: text/html; charset=UTF-8'];
 
-                    if (wp_mail($fallback_user_email, $subject, $body, $headers)) {
-                        return new WP_REST_Response(['message' => 'Lead sent successfully to Fallback User API and email notification sent.'], 200);
-                    } else {
-                        return new WP_REST_Response(['message' => 'Lead sent to Fallback User API but failed to send email notification.'], 500);
-                    }
+                    wp_mail($fallback_user_email, $subject, $body, $headers);
+
+                    return new WP_REST_Response(['message' => 'Lead sent successfully to Fallback User API'], 200);
                 } else {
                     // Store and assign the lead to the fallback user
                     $lead_id = store_lead($lead_data, $fallback_user_id);
