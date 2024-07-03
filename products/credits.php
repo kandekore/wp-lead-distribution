@@ -217,12 +217,13 @@ function custom_order_complete_status($order_status, $order_id) {
 
 add_action('woocommerce_subscription_status_updated', 'notify_subscription_status_change', 10, 3);
 
+
 function notify_subscription_status_change($subscription, $old_status, $new_status) {
     $user_id = $subscription->get_user_id();
     if ($new_status == 'active') {
         send_credit_notification($user_id, 'Subscription Renewed', 'Dear user, your subscription has been renewed.');
         notify_admin('Subscription Renewed', 'User ID ' . $user_id . ' had their subscription renewed.');
-    } elseif ($new_status == 'cancelled') {
+    } elseif ($new_status == 'cancelled' && $old_status !== 'active') {
         send_credit_notification($user_id, 'Subscription Cancelled', 'Dear user, your subscription has been cancelled.');
         notify_admin('Subscription Cancelled', 'User ID ' . $user_id . ' had their subscription cancelled.');
     } elseif ($new_status == 'failed') {
