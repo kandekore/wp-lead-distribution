@@ -67,18 +67,20 @@ function admin_edit_user_postcode_selections($user) {
     $all_postcode_areas = json_decode(get_option('custom_postcode_areas'), true);
     $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
 
-    echo '<div class="custom-accordion"><h3>' . __('Edit User Postcode Areas') . '</h3><div>';
+    echo '<h3>' . __('Edit User Postcode Areas') . '</h3>';
+    echo '<table class="form-table">';
     foreach ($all_postcode_areas as $region => $codes) {
-        echo '<p><strong>' . esc_html($region) . ':</strong></p>';
+        echo '<tr><th>' . esc_html($region) . '</th><td>';
         foreach ($codes as $code) {
             $checked = !empty($selected_postcode_areas[$region]) && in_array($code, $selected_postcode_areas[$region]) ? ' checked="checked"' : '';
             echo '<label><input type="checkbox" name="postcode_areas[' . esc_attr($region) . '][]" value="' . esc_attr($code) . '"' . $checked . '> ' . esc_html($code) . '</label><br>';
         }
+        echo '</td></tr>';
     }
-    echo '</div></div>';
+    echo '</table>';
 }
-add_action('show_user_profile', 'admin_edit_user_postcode_selections', 2);
-add_action('edit_user_profile', 'admin_edit_user_postcode_selections', 2);
+add_action('show_user_profile', 'admin_edit_user_postcode_selections');
+add_action('edit_user_profile', 'admin_edit_user_postcode_selections');
 
 // Render user credits management section
 add_action('show_user_profile', 'render_user_credits_profile_page', 1);
@@ -151,12 +153,19 @@ function save_admin_edited_user_postcode_selections($user_id) {
     if (!current_user_can('edit_user', $user_id)) {
         return false;
     }
+    error_log('Saving postcode areas for user ID: ' . $user_id); // Debugging log
+
     if (isset($_POST['postcode_areas'])) {
         $sanitized_areas = array();
         foreach ($_POST['postcode_areas'] as $region => $codes) {
             $sanitized_areas[$region] = array_map('sanitize_text_field', $codes);
         }
         update_user_meta($user_id, 'selected_postcode_areas', json_encode($sanitized_areas));
+
+        // Debugging log
+        error_log('Saved postcode areas: ' . json_encode($sanitized_areas));
+    } else {
+        error_log('No postcode areas found in the request.');
     }
 }
 add_action('personal_options_update', 'save_admin_edited_user_postcode_selections');
