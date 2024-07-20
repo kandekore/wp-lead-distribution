@@ -143,24 +143,23 @@ wp_mail($master_admin_email, $subject, $body, $headers);
                         'resend' => $lead_data['resend'],
                         'vin' => $lead_data['vin'],
                     ];
-
-                    $response = wp_remote_post($fallback_api_endpoint, [
-                        'body' => json_encode($api_lead_data),
-                        'headers' => [
-                            'Content-Type' => 'application/json',
-                        ],
-                    ]);
-
+            
+                    // Construct the GET URL with query parameters
+                    $fallback_api_url = add_query_arg($api_lead_data, $fallback_api_endpoint);
+            
+                    // Send the lead to the fallback user API endpoint using GET
+                    $response = wp_remote_get($fallback_api_url);
+            
                     if (is_wp_error($response)) {
                         return new WP_REST_Response(['message' => 'Failed to send lead to Fallback User API'], 500);
                     }
-
+            
                     $api_response_body = wp_remote_retrieve_body($response);
                     $subject = "API Response for Lead ID: " . $lead_data['leadid'];
                     $body = "API Response: " . $api_response_body;
-
+            
                     wp_mail($fallback_user_email, $subject, $body, ['Content-Type: text/plain; charset=UTF-8']);
-
+            
                     $lead_id = store_lead($lead_data, $fallback_user_id);
                     $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
                     if (!is_wp_error($lead_id) && $result) {
@@ -168,7 +167,9 @@ wp_mail($master_admin_email, $subject, $body, $headers);
                     } else {
                         return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User'], 500);
                     }
-                } else {
+                }
+            }
+            else {
                     $lead_id = store_lead($lead_data, $fallback_user_id);
                     $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
 
@@ -214,7 +215,7 @@ wp_mail($master_admin_email, $subject, $body, $headers);
     } else {
         return new WP_REST_Response(['message' => 'Failed to send lead, user out of credits'], 500);
     }
-}
+
 
 
     // For testing, simply return a success message without actual WP_REST_Response
