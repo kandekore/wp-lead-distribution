@@ -158,7 +158,8 @@ wp_mail($master_admin_email, $subject, $body, $headers);
                     $subject = "API Response for Lead ID: " . $lead_data['leadid'];
                     $body = "API Response: " . $api_response_body;
             
-                    wp_mail($fallback_user_email, $subject, $body, ['Content-Type: text/plain; charset=UTF-8']);
+                    // Send the email to leads@scrapuk.co.uk
+                    wp_mail('leads@scrapuk.co.uk', $subject, $body, ['Content-Type: text/plain; charset=UTF-8']);
             
                     $lead_id = store_lead($lead_data, $fallback_user_id);
                     $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
@@ -168,7 +169,7 @@ wp_mail($master_admin_email, $subject, $body, $headers);
                         return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User'], 500);
                     }
                 }
-            }
+            }            
             else {
                     $lead_id = store_lead($lead_data, $fallback_user_id);
                     $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
