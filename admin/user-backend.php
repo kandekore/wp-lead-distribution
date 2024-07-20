@@ -147,13 +147,14 @@ function update_user_credits($user_id) {
     }
 }
 
-
 // Save admin edited user postcode selections
 function save_admin_edited_user_postcode_selections($user_id) {
     if (!current_user_can('edit_user', $user_id)) {
         return false;
     }
+
     error_log('Saving postcode areas for user ID: ' . $user_id); // Debugging log
+    error_log('POST data: ' . print_r($_POST, true)); // Log the entire $_POST array
 
     if (isset($_POST['postcode_areas'])) {
         $sanitized_areas = array();
@@ -223,3 +224,4 @@ function my_admin_footer_scripts() {
     <?php
 }
 add_action('admin_footer', 'my_admin_footer_scripts');
+?>
