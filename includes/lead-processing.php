@@ -1,9 +1,9 @@
-<?php
+<?php 
 
 if ( ! defined( 'ABSPATH' ) ) exit;    
+
 function process_lead_submission(WP_REST_Request $request) {
     // Extract relevant data from the request
-  
     $lead_data = [
         'postcode' => strtoupper(sanitize_text_field($request->get_param('postcode'))),
         'registration' => strtoupper(sanitize_text_field($request->get_param('reg'))),
@@ -14,7 +14,7 @@ function process_lead_submission(WP_REST_Request $request) {
         'keepers' => sanitize_text_field($request->get_param('keepers')),
         'contact' => sanitize_text_field($request->get_param('contact')),
         'email' => sanitize_email($request->get_param('email')),
-        'info' => sanitize_textarea_field($request->get_param('info')), 
+        'info' => sanitize_textarea_field($request->get_param('info')),
         'fuel' => sanitize_text_field($request->get_param('fuel')),
         'mot' => sanitize_text_field($request->get_param('mot')),
         'trans' => sanitize_text_field($request->get_param('trans')),
@@ -24,14 +24,10 @@ function process_lead_submission(WP_REST_Request $request) {
         'resend' => sanitize_text_field($request->get_param('resend')),
         'vin' => sanitize_text_field($request->get_param('vin')),
     ];
-    // $lead_id = store_lead($lead_data);
-
-   
 
     $postcode_prefix = substr($lead_data['postcode'], 0, 2);
     $eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix);
 
-     // Deserialize your settings array
     // Deserialize your settings array
     $settings = get_option('master_admin_settings');
     if ($settings) {
@@ -41,59 +37,59 @@ function process_lead_submission(WP_REST_Request $request) {
         $minimum_year = $settings_array["minimum_year"];
         $master_admin_email = $settings_array["master_admin_email"];
         $master_admin_user_id = $settings_array["master_admin_user_id"];
-// Assuming $lead_data contains all the necessary fields
-$rootURL = get_site_url();
-$apiEndpoint = "/wp-json/lead-management/v1/submit-lead?";
-$resendParam = "resend=true";
 
-// Construct the query parameters from $lead_data, excluding 'resend' and adding it at the end
-$queryParams = [];
-foreach ($lead_data as $key => $value) {
-    if ($key != 'resend') { // Exclude the resend parameter
-        $queryParams[] = $key . "=" . urlencode($value);
-    }
-}
-$queryString = implode("&", $queryParams) . "&" . $resendParam;
+        // Assuming $lead_data contains all the necessary fields
+        $rootURL = get_site_url();
+        $apiEndpoint = "/wp-json/lead-management/v1/submit-lead?";
+        $resendParam = "resend=true";
 
-// Complete API URL
-$apiURL = $rootURL . $apiEndpoint . $queryString;
-        if ($master_admin_function_enabled == "1" && !empty($minimum_year) && intval($lead_data['date']) > intval($minimum_year) && 
-        $lead_data['resend'] == "false") {
+        // Construct the query parameters from $lead_data, excluding 'resend' and adding it at the end
+        $queryParams = [];
+        foreach ($lead_data as $key => $value) {
+            if ($key != 'resend') { // Exclude the resend parameter
+                $queryParams[] = $key . "=" . urlencode($value);
+            }
+        }
+        $queryString = implode("&", $queryParams) . "&" . $resendParam;
+
+        // Complete API URL
+        $apiURL = $rootURL . $apiEndpoint . $queryString;
+
+        if ($master_admin_function_enabled == "1" && !empty($minimum_year) && intval($lead_data['date']) > intval($minimum_year) &&
+            $lead_data['resend'] == "false") {
             // Prepare and send email to Master Admin
-            // Prepare and send email to Master Admin
-$subject = "New Lead: " . $lead_data['leadid'];
+            $subject = "New Lead: " . $lead_data['leadid'];
 
-// Start of the HTML email body
-$body = "<html><body>";
-$body .= "<h3>New Lead Details for Master Admin</h3>";
+            // Start of the HTML email body
+            $body = "<html><body>";
+            $body .= "<h3>New Lead Details for Master Admin</h3>";
 
-// Assuming 'registration' and 'model' are important and should be highlighted
-if (isset($lead_data['registration']) && isset($lead_data['model'])) {
-    $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
-}
+            // Assuming 'registration' and 'model' are important and should be highlighted
+            if (isset($lead_data['registration']) && isset($lead_data['model'])) {
+                $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
+            }
 
-// Manually display selected meta data
-$meta_keys = [
-    'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date', 
-    'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due', 
-    'vin'
-];
+            // Manually display selected meta data
+            $meta_keys = [
+                'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
+                'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
+                'vin'
+            ];
 
-$body .= "<ul style='list-style-type:none;'>";
-foreach ($meta_keys as $key) {
-    if (!empty($lead_data[$key])) { // Only display if value is not empty
-        $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>";
-    }
-}
-$body .= "</ul>";
-$body .= "<p>To resend the lead, click <a href='" . esc_url($apiURL) . "'>here</a>.</p>";
-// End of the HTML email body
-$body .= "</body></html>";
+            $body .= "<ul style='list-style-type:none;'>";
+            foreach ($meta_keys as $key) {
+                if (!empty($lead_data[$key])) { // Only display if value is not empty
+                    $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>";
+                }
+            }
+            $body .= "</ul>";
+            $body .= "<p>To resend the lead, click <a href='" . esc_url($apiURL) . "'>here</a>.</p>";
+            // End of the HTML email body
+            $body .= "</body></html>";
 
-$headers = ['Content-Type: text/html; charset=UTF-8'];
+            $headers = ['Content-Type: text/html; charset=UTF-8'];
 
-wp_mail($master_admin_email, $subject, $body, $headers);
-
+            wp_mail($master_admin_email, $subject, $body, $headers);
 
             // Assign lead to Master Admin user ID and store the lead
             $lead_id = store_lead($lead_data, $master_admin_user_id);
@@ -108,11 +104,8 @@ wp_mail($master_admin_email, $subject, $body, $headers);
         error_log('Master Admin settings not found or are incorrect.');
     }
 
-    // Output for testing: List of eligible recipient IDs
-    echo "Eligible Recipients for Postcode Prefix {$postcode_prefix}: " . implode(', ', $eligible_recipients) . "<br>";
-
-     // No eligible recipients found
-       if (empty($eligible_recipients)) {
+    // Check if there are eligible recipients
+    if (empty($eligible_recipients)) {
         $settings = get_option('fallback_settings');
         if ($settings) {
             $settings_array = maybe_unserialize($settings);
@@ -143,24 +136,24 @@ wp_mail($master_admin_email, $subject, $body, $headers);
                         'resend' => $lead_data['resend'],
                         'vin' => $lead_data['vin'],
                     ];
-            
+
                     // Construct the GET URL with query parameters
                     $fallback_api_url = add_query_arg($api_lead_data, $fallback_api_endpoint);
-            
+
                     // Send the lead to the fallback user API endpoint using GET
                     $response = wp_remote_get($fallback_api_url);
-            
+
                     if (is_wp_error($response)) {
                         return new WP_REST_Response(['message' => 'Failed to send lead to Fallback User API'], 500);
                     }
-            
+
                     $api_response_body = wp_remote_retrieve_body($response);
                     $subject = "API Response for Lead ID: " . $lead_data['leadid'];
                     $body = "API Response: " . $api_response_body;
-            
+
                     // Send the email to leads@scrapuk.co.uk
                     wp_mail('leads@scrapuk.co.uk', $subject, $body, ['Content-Type: text/plain; charset=UTF-8']);
-            
+
                     $lead_id = store_lead($lead_data, $fallback_user_id);
                     $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
                     if (!is_wp_error($lead_id) && $result) {
@@ -168,9 +161,7 @@ wp_mail($master_admin_email, $subject, $body, $headers);
                     } else {
                         return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User'], 500);
                     }
-                }
-            }            
-            else {
+                } else {
                     $lead_id = store_lead($lead_data, $fallback_user_id);
                     $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
 
@@ -196,30 +187,26 @@ wp_mail($master_admin_email, $subject, $body, $headers);
             }
         }
     }
+
     // Randomly pick an eligible recipient from the array
     $random_key = array_rand($eligible_recipients);
     $recipient_id = $eligible_recipients[$random_key];
     $lead_id = store_lead($lead_data, $recipient_id);
-     // Ensure lead was successfully stored
-     if (is_wp_error($lead_id)) {
+
+    // Ensure lead was successfully stored
+    if (is_wp_error($lead_id)) {
         return new WP_REST_Response(['message' => 'Failed to store lead'], 500);
     }
-   
 
     // Deduct a credit from the chosen recipient and send the lead
     if (deduct_credit_from_user($recipient_id)) {
         assign_lead_to_user($recipient_id, $lead_data, $lead_id);
         send_lead_email_to_user($recipient_id, $lead_data);
-        // assign_lead_to_user($recipient_id, $lead_data);
-        // send_lead_email_to_user($recipient_id, $lead_data);
         return new WP_REST_Response(['message' => 'Lead sent successfully to ' . $recipient_id], 200);
     } else {
         return new WP_REST_Response(['message' => 'Failed to send lead, user out of credits'], 500);
     }
-
-
-
-    // For testing, simply return a success message without actual WP_REST_Response
+}
 
 function get_eligible_recipients_for_lead($postcode_prefix) {
     $eligible_recipients = [];
@@ -247,8 +234,6 @@ function get_eligible_recipients_for_lead($postcode_prefix) {
     return $eligible_recipients;
 }
 
-
-
 function deduct_credit_from_user($user_id) {
     $credits = get_user_meta($user_id, '_user_credits', true);
     $credits = intval($credits);
@@ -257,10 +242,13 @@ function deduct_credit_from_user($user_id) {
         $credits--; // Deduct one credit
         update_user_meta($user_id, '_user_credits', $credits);
 
-        // Check if the credits are now zero or less and handle subscription cancellation if necessary
+        // Check if the credits are now zero or less and handle subscription renewal or cancellation if necessary
         if ($credits <= 0) {
-            cancel_user_subscription($user_id);
-            send_credit_depletion_email($user_id);
+            $renewal_attempted = check_credits_and_renew_subscription($user_id);
+            if (!$renewal_attempted) {
+                cancel_user_subscription($user_id);
+                send_credit_depletion_email($user_id);
+            }
         } elseif ($credits <= 5) {
             check_credits_and_renew_subscription($user_id);
         }
@@ -283,6 +271,7 @@ function cancel_user_subscription($user_id) {
     }
 }
 
+
 function send_credit_depletion_email($user_id) {
     $user_info = get_userdata($user_id);
     $to = $user_info->user_email;
@@ -300,9 +289,9 @@ function send_credit_depletion_email($user_id) {
     wp_mail($to, $subject, $body, $headers);
 }
 
-
 function check_credits_and_renew_subscription($user_id) {
     $subscriptions = wcs_get_users_subscriptions($user_id);
+    $renewal_attempted = false;
 
     foreach ($subscriptions as $subscription) {
         if ($subscription->has_status('active') && $subscription->get_meta('_renew_on_credit_depletion') === 'yes') {
@@ -315,18 +304,21 @@ function check_credits_and_renew_subscription($user_id) {
                 error_log("Early renewal initiated for subscription {$subscription->get_id()} for user {$user_id}.");
 
                 // Break if only renewing one subscription
+                $renewal_attempted = true;
                 break;
             }
         }
     }
-}
 
+    return $renewal_attempted;
+}
 
 function assign_lead_to_user($user_id, $lead_data, $lead_id) {
     // Example of associating a lead post with a user. Adjust according to your storage method.
     update_post_meta($lead_id, 'assigned_user', $user_id);
     return true;
 }
+
 function send_lead_email_to_user($user_id, $lead_data) {
     // Retrieve user's email address
     $user_info = get_userdata($user_id);
@@ -347,13 +339,13 @@ function send_lead_email_to_user($user_id, $lead_data) {
 
     // Assuming 'registration' and 'model' are important and should be highlighted
     if (isset($lead_data['registration']) && isset($lead_data['model'])) {
-        $body .= "<h4>". esc_html($lead_data['leadid']) . " - ". esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
+        $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
     }
 
     // Manually display selected meta data
     $meta_keys = [
-        'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date', 
-        'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due', 
+        'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
+        'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
         'vin'
     ];
 
@@ -378,7 +370,6 @@ function send_lead_email_to_user($user_id, $lead_data) {
     return wp_mail($to, $subject, $body, $headers);
 }
 
-
 add_action('profile_update', 'update_user_postcode_queues', 10, 2);
 function update_user_postcode_queues($user_id, $old_user_data) {
     $selected_postcode_areas = json_decode(get_user_meta($user_id, 'selected_postcode_areas', true), true);
@@ -398,6 +389,7 @@ function update_user_postcode_queues($user_id, $old_user_data) {
         }
     }
 }
+
 function process_lead_submission_with_lock(WP_REST_Request $request) {
     $lock_key = 'process_lead_lock';
     $lock_timeout = 10; // Lock timeout in seconds
