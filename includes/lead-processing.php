@@ -233,7 +233,6 @@ function get_eligible_recipients_for_lead($postcode_prefix) {
 
     return $eligible_recipients;
 }
-
 function deduct_credit_from_user($user_id) {
     $credits = get_user_meta($user_id, '_user_credits', true);
     $credits = intval($credits);
@@ -245,12 +244,14 @@ function deduct_credit_from_user($user_id) {
         // Check if the credits are now zero or less and handle subscription renewal or cancellation if necessary
         if ($credits <= 0) {
             $renewal_attempted = check_credits_and_renew_subscription($user_id);
+            
+            
             if (!$renewal_attempted) {
                 cancel_user_subscription($user_id);
                 send_credit_depletion_email($user_id);
             }
         } elseif ($credits <= 5) {
-            check_credits_and_renew_subscription($user_id);
+            check_credits_and_renew_subscription($user_id); 
         }
 
         return true; // Successfully deducted credit
@@ -258,6 +259,8 @@ function deduct_credit_from_user($user_id) {
 
     return false; // User had no credits to deduct
 }
+
+
 
 function cancel_user_subscription($user_id) {
     $subscriptions = wcs_get_users_subscriptions($user_id);
@@ -288,7 +291,13 @@ function send_credit_depletion_email($user_id) {
 
     wp_mail($to, $subject, $body, $headers);
 }
-
+add_filter('woocommerce_email_enabled_customer_completed_renewal_order', 'disable_renewal_email_for_automatic_renewals', 10, 2);
+function disable_renewal_email_for_automatic_renewals($enabled, $order) {
+    if ($order->get_meta('_triggered_by_credits_renewal')) {
+        return false;
+    }
+    return $enabled;
+}
 function check_credits_and_renew_subscription($user_id) {
     $subscriptions = wcs_get_users_subscriptions($user_id);
     $renewal_attempted = false;
@@ -300,6 +309,9 @@ function check_credits_and_renew_subscription($user_id) {
                 // Get the renewal order
                 $renewal_order = wcs_create_renewal_order($subscription);
 
+                // Set the custom meta to flag it was triggered by credits
+                $renewal_order->update_meta_data('_triggered_by_credits_renewal', true);
+
                 // Process the renewal order payment
                 $result = WC_Subscriptions_Payment_Gateways::trigger_gateway_renewal_payment_hook($renewal_order);
 
@@ -310,7 +322,7 @@ function check_credits_and_renew_subscription($user_id) {
                     // Update the subscription dates
                     wcs_update_dates_after_early_renewal($subscription, $renewal_order);
 
-                    $renewal_attempted = true;
+                    $renewal_attempted = true; // Renewal was successful
                     break; // Stop after successfully renewing one subscription
                 } else {
                     // Handle failed renewal attempt
@@ -322,10 +334,8 @@ function check_credits_and_renew_subscription($user_id) {
         }
     }
 
-    return $renewal_attempted;
+    return $renewal_attempted; // Return whether a renewal was attempted successfully or not
 }
-
-
 function assign_lead_to_user($user_id, $lead_data, $lead_id) {
     // Example of associating a lead post with a user. Adjust according to your storage method.
     update_post_meta($lead_id, 'assigned_user', $user_id);
