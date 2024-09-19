@@ -127,6 +127,8 @@ function renew_subscription_for_user_auto($user_id) {
                     if ($renewal_order) {
                         $renewal_order->set_payment_method(wc_get_payment_gateway_by_order($subscription));
                         $renewal_order->update_meta_data('_subscription_renewal_early', $subscription->get_id());
+                        // Add a custom meta to flag this renewal as triggered by credits depletion
+                        $renewal_order->update_meta_data('_triggered_by_credits_renewal', true);
                         $renewal_order->save();
                         WC_Subscriptions_Payment_Gateways::trigger_gateway_renewal_payment_hook($renewal_order);
                         $renewal_order = wc_get_order($renewal_order->get_id());
@@ -156,7 +158,6 @@ function renew_subscription_for_user_auto($user_id) {
             }
         }
     }
-
     if (!$eligibleForRenewal) {
         error_log("No eligible subscriptions found for renewal for user $user_id");
     }
@@ -217,10 +218,14 @@ function custom_order_complete_status($order_status, $order_id) {
 
 add_action('woocommerce_subscription_status_updated', 'notify_subscription_status_change', 10, 3);
 
-
 function notify_subscription_status_change($subscription, $old_status, $new_status) {
     $user_id = $subscription->get_user_id();
-    if ($new_status == 'active') {
+    
+    // Check if renewal was triggered by credit depletion and avoid sending "Subscription Renewed" email
+    $renewal_order = wc_get_order($subscription->get_last_order_id());
+    $triggered_by_credits_renewal = $renewal_order ? $renewal_order->get_meta('_triggered_by_credits_renewal') : false;
+
+    if ($new_status == 'active' && !$triggered_by_credits_renewal) {
         send_credit_notification($user_id, 'Subscription Renewed', 'Dear user, your subscription has been renewed.');
         notify_admin('Subscription Renewed', 'User ID ' . $user_id . ' had their subscription renewed.');
     } elseif ($new_status == 'cancelled' && $old_status !== 'active') {
@@ -231,6 +236,7 @@ function notify_subscription_status_change($subscription, $old_status, $new_stat
         notify_admin('Subscription Renewal Failed', 'User ID ' . $user_id . ' had a renewal payment failure.');
     }
 }
+
 
 // Function to manually trigger the credit check via URL
 function manual_trigger_credit_check() {
