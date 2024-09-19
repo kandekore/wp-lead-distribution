@@ -26,7 +26,7 @@ function process_lead_submission(WP_REST_Request $request) {
     ];
 
     $postcode_prefix = substr($lead_data['postcode'], 0, 2);
-    $eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix);
+    $eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix, $lead_data['vin']);
 
     // Deserialize your settings array
     $settings = get_option('master_admin_settings');
@@ -208,14 +208,16 @@ function process_lead_submission(WP_REST_Request $request) {
     }
 }
 
-function get_eligible_recipients_for_lead($postcode_prefix) {
+function get_eligible_recipients_for_lead($postcode_prefix, $lead_vin) {
     $eligible_recipients = [];
     $users = get_users(); // Consider refining this query based on your needs
 
+    // Loop through each user to check their credits and selected postcode areas
     foreach ($users as $user) {
         $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
         $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
 
+        // Only consider users with credits and selected postcode areas
         if ($user_credits > 0 && !empty($selected_postcode_areas)) {
             foreach ($selected_postcode_areas as $region => $codes) {
                 foreach ($codes as $code) {
@@ -231,8 +233,43 @@ function get_eligible_recipients_for_lead($postcode_prefix) {
         }
     }
 
+    // Now remove users who already own a lead with the same VIN
+    $eligible_recipients = filter_out_lead_owners_by_vin($eligible_recipients, $lead_vin);
+
     return $eligible_recipients;
 }
+
+// Helper function to filter out users who already own a lead with the same VIN
+function filter_out_lead_owners_by_vin($eligible_recipients, $lead_vin) {
+    // Get all lead posts that match the given VIN
+    $args = [
+        'post_type'  => 'lead', // Replace with your lead post type if different
+        'meta_query' => [
+            [
+                'key'   => 'vin',
+                'value' => $lead_vin,
+                'compare' => '='
+            ]
+        ],
+        'posts_per_page' => -1,
+    ];
+
+    $leads = get_posts($args);
+
+    // Collect user IDs who already own a lead with this VIN
+    $users_to_remove = [];
+
+    foreach ($leads as $lead) {
+        $owner_id = get_post_meta($lead->ID, 'assigned_user', true); // Assuming 'assigned_user' holds the user ID
+        if ($owner_id) {
+            $users_to_remove[] = (int)$owner_id;
+        }
+    }
+
+    // Filter out those users from the eligible recipients list
+    return array_diff($eligible_recipients, $users_to_remove);
+}
+
 function deduct_credit_from_user($user_id) {
     $credits = get_user_meta($user_id, '_user_credits', true);
     $credits = intval($credits);
@@ -289,9 +326,13 @@ function send_credit_depletion_email($user_id) {
 
     $headers = ['Content-Type: text/html; charset=UTF-8'];
 
-    wp_mail($to, $subject, $body, $headers);
+    if(!wp_mail($to, $subject, $body, $headers)) {
+        error_log("Failed to send credit depletion email to user ID {$user_id}");
+    }
 }
+
 add_filter('woocommerce_email_enabled_customer_completed_renewal_order', 'disable_renewal_email_for_automatic_renewals', 10, 2);
+
 function disable_renewal_email_for_automatic_renewals($enabled, $order) {
     if ($order->get_meta('_triggered_by_credits_renewal')) {
         return false;
