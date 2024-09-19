@@ -300,18 +300,31 @@ function check_credits_and_renew_subscription($user_id) {
                 // Get the renewal order
                 $renewal_order = wcs_create_renewal_order($subscription);
 
-                // Log or notify as needed
-                error_log("Early renewal initiated for subscription {$subscription->get_id()} for user {$user_id}.");
+                // Process the renewal order payment
+                $result = WC_Subscriptions_Payment_Gateways::trigger_gateway_renewal_payment_hook($renewal_order);
 
-                // Break if only renewing one subscription
-                $renewal_attempted = true;
-                break;
+                if ($result && $renewal_order->get_status() === 'completed') {
+                    // Log or notify as needed
+                    error_log("Early renewal successful for subscription {$subscription->get_id()} for user {$user_id}.");
+
+                    // Update the subscription dates
+                    wcs_update_dates_after_early_renewal($subscription, $renewal_order);
+
+                    $renewal_attempted = true;
+                    break; // Stop after successfully renewing one subscription
+                } else {
+                    // Handle failed renewal attempt
+                    $renewal_order->update_status('failed');
+                    $renewal_order->add_order_note('Early renewal payment failed.');
+                    error_log("Early renewal failed for subscription {$subscription->get_id()} for user {$user_id}.");
+                }
             }
         }
     }
 
     return $renewal_attempted;
 }
+
 
 function assign_lead_to_user($user_id, $lead_data, $lead_id) {
     // Example of associating a lead post with a user. Adjust according to your storage method.
