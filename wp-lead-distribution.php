@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WordPress Lead Distribution
  * Description: Collects and distributes leads to users on a subscription basis.
- * Version: 1.1.7
+ * Version: 2.0.0
  * Author: D.Kandekore
  */
 
@@ -16,7 +16,7 @@ define('LMP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 include_once plugin_dir_path(__FILE__) . 'includes/api-endpoints.php';
 include_once plugin_dir_path(__FILE__) . 'includes/lead-processing.php';
 include_once plugin_dir_path(__FILE__) . 'includes/utility-functions.php';
-;
+include_once plugin_dir_path(__FILE__) . 'admin/post-pay-user.php';
 include_once plugin_dir_path(__FILE__) . 'includes/load-postcodes.php';
 include_once plugin_dir_path(__FILE__) . 'admin/user-signup.php';
 include_once plugin_dir_path(__FILE__) . 'admin/user-backend.php';

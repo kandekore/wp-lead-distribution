@@ -212,21 +212,39 @@ function get_eligible_recipients_for_lead($postcode_prefix, $lead_vin) {
     $eligible_recipients = [];
     $users = get_users(); // Consider refining this query based on your needs
 
-    // Loop through each user to check their credits and selected postcode areas
+    // Loop through each user to check their role, credits, and selected postcode areas
     foreach ($users as $user) {
-        $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
         $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
 
-        // Only consider users with credits and selected postcode areas
-        if ($user_credits > 0 && !empty($selected_postcode_areas)) {
-            foreach ($selected_postcode_areas as $region => $codes) {
-                foreach ($codes as $code) {
-                    // Replace "#" with regex pattern to match any single digit
-                    $codePattern = str_replace("#", "[0-9]", $code);
-                    // Check if the lead's postcode prefix matches the customer's postcode pattern
-                    if (preg_match("/^$codePattern/", $postcode_prefix)) {
-                        $eligible_recipients[] = $user->ID;
-                        break 2; // Match found, no need to continue checking
+        // If the user is a post-pay user and lead reception is enabled
+        if (in_array('post_pay', $user->roles) && get_user_meta($user->ID, 'enable_lead_reception', true) === '1') {
+            if (!empty($selected_postcode_areas)) {
+                foreach ($selected_postcode_areas as $region => $codes) {
+                    foreach ($codes as $code) {
+                        // Replace "#" with regex pattern to match any single digit
+                        $codePattern = str_replace("#", "[0-9]", $code);
+                        // Check if the lead's postcode prefix matches the customer's postcode pattern
+                        if (preg_match("/^$codePattern/", $postcode_prefix)) {
+                            $eligible_recipients[] = $user->ID;
+                            break 2; // Match found, no need to continue checking
+                        }
+                    }
+                }
+            }
+        }
+        // If the user is not post-pay, check if they have credits
+        else {
+            $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
+            if ($user_credits > 0 && !empty($selected_postcode_areas)) {
+                foreach ($selected_postcode_areas as $region => $codes) {
+                    foreach ($codes as $code) {
+                        // Replace "#" with regex pattern to match any single digit
+                        $codePattern = str_replace("#", "[0-9]", $code);
+                        // Check if the lead's postcode prefix matches the customer's postcode pattern
+                        if (preg_match("/^$codePattern/", $postcode_prefix)) {
+                            $eligible_recipients[] = $user->ID;
+                            break 2; // Match found, no need to continue checking
+                        }
                     }
                 }
             }
@@ -238,6 +256,8 @@ function get_eligible_recipients_for_lead($postcode_prefix, $lead_vin) {
 
     return $eligible_recipients;
 }
+
+
 
 // Helper function to filter out users who already own a lead with the same VIN
 function filter_out_lead_owners_by_vin($eligible_recipients, $lead_vin) {
@@ -271,6 +291,13 @@ function filter_out_lead_owners_by_vin($eligible_recipients, $lead_vin) {
 }
 
 function deduct_credit_from_user($user_id) {
+    // Check if the user is post-pay
+    if (in_array('post_pay', get_userdata($user_id)->roles)) {
+        // Post-pay users do not have credits deducted, and no renewal or cancellation is necessary
+        return true;
+    }
+
+    // Existing logic for pre-pay users
     $credits = get_user_meta($user_id, '_user_credits', true);
     $credits = intval($credits);
 
@@ -281,7 +308,6 @@ function deduct_credit_from_user($user_id) {
         // Check if the credits are now zero or less and handle subscription renewal or cancellation if necessary
         if ($credits <= 0) {
             $renewal_attempted = check_credits_and_renew_subscription($user_id);
-            
             
             if (!$renewal_attempted) {
                 cancel_user_subscription($user_id);
@@ -296,8 +322,6 @@ function deduct_credit_from_user($user_id) {
 
     return false; // User had no credits to deduct
 }
-
-
 
 function cancel_user_subscription($user_id) {
     $subscriptions = wcs_get_users_subscriptions($user_id);
