@@ -79,7 +79,7 @@ function process_lead_submission(WP_REST_Request $request) {
             $body .= "<ul style='list-style-type:none;'>";
             foreach ($meta_keys as $key) {
                 if (!empty($lead_data[$key])) { // Only display if value is not empty
-                    $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>";
+                    $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>"."%n";
                 }
             }
             $body .= "</ul>";
@@ -423,11 +423,11 @@ function send_lead_email_to_user($user_id, $lead_data) {
 
     // Start of the HTML email body
     $body = "<html><body>";
-    $body .= "<h3>New Lead Details</h3>";
+    $body .= "<h3>New Lead Details</h3>"."%n";
 
     // Assuming 'registration' and 'model' are important and should be highlighted
     if (isset($lead_data['registration']) && isset($lead_data['model'])) {
-        $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
+        $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>" ."%n";
     }
 
     // Manually display selected meta data
@@ -440,7 +440,7 @@ function send_lead_email_to_user($user_id, $lead_data) {
     $body .= "<ul style='list-style-type:none;'>";
     foreach ($meta_keys as $key) {
         if (!empty($lead_data[$key])) { // Only display if value is not empty
-            $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>";
+            $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>"."%n";
         }
     }
     $body .= "</ul>";
