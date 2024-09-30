@@ -116,45 +116,57 @@ function filter_leads_by_custom_filters($query) {
 
 function apply_date_filter(&$query, $filter_value) {
     $date_query = [];
+    $start_of_week = get_option('start_of_week', 0); // Get the WordPress start of the week (0=Sunday)
+    $current_day_of_week = date('w'); // 0 (Sunday) to 6 (Saturday)
+
     switch ($filter_value) {
         case 'today':
-            $date_query = ['year' => date('Y'), 'month' => date('m'), 'day' => date('d')];
+            $date_query = [
+                'year' => date('Y'), 
+                'month' => date('m'), 
+                'day' => date('d')
+            ];
             break;
         case 'yesterday':
             $yesterday = strtotime('-1 day');
-            $date_query = ['year' => date('Y', $yesterday), 'month' => date('m', $yesterday), 'day' => date('d', $yesterday)];
+            $date_query = [
+                'year' => date('Y', $yesterday), 
+                'month' => date('m', $yesterday), 
+                'day' => date('d', $yesterday)
+            ];
             break;
         case 'this_week':
-            $startOfWeek = date('Y-m-d', strtotime('this week'));
-            $endOfWeek = date('Y-m-d', strtotime('this week +6 days'));
-            $date_query = ['after' => $startOfWeek, 'before' => $endOfWeek, 'inclusive' => true];
+            // Calculate start and end of this week based on WordPress setting
+            $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
+            $startOfWeek = date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
+            $endOfWeek = date('Y-m-d', strtotime($startOfWeek . ' +6 days'));
+            $date_query = [
+                'after' => $startOfWeek, 
+                'before' => $endOfWeek, 
+                'inclusive' => true
+            ];
             break;
         case 'last_week':
-            $startOfLastWeek = date('Y-m-d', strtotime('last week'));
-            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
-            $date_query = ['after' => $startOfLastWeek, 'before' => $endOfLastWeek, 'inclusive' => true];
+            // Calculate start and end of last week
+            $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
+            $startOfThisWeek = date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
+            $startOfLastWeek = date('Y-m-d', strtotime($startOfThisWeek . ' -7 days'));
+            $endOfLastWeek = date('Y-m-d', strtotime($startOfThisWeek . ' -1 day'));
+            $date_query = [
+                'after' => $startOfLastWeek, 
+                'before' => $endOfLastWeek, 
+                'inclusive' => true
+            ];
             break;
-        case 'last_2_weeks':
-            $startOfLast2Weeks = date('Y-m-d', strtotime('-2 weeks'));
-            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
-            $date_query = ['after' => $startOfLast2Weeks, 'before' => $endOfLastWeek, 'inclusive' => true];
-            break;
-        case 'last_3_weeks':
-            $startOfLast3Weeks = date('Y-m-d', strtotime('-3 weeks'));
-            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
-            $date_query = ['after' => $startOfLast3Weeks, 'before' => $endOfLastWeek, 'inclusive' => true];
-            break;
-        case 'last_4_weeks':
-            $startOfLast4Weeks = date('Y-m-d', strtotime('-4 weeks'));
-            $endOfLastWeek = date('Y-m-d', strtotime('last week +6 days'));
-            $date_query = ['after' => $startOfLast4Weeks, 'before' => $endOfLastWeek, 'inclusive' => true];
-            break;
+        // Add other cases if needed
     }
-    
+
     if ($date_query) {
         $query->set('date_query', [$date_query]);
     }
 }
+
+
 function enqueue_admin_scripts() {
     global $pagenow, $typenow;
 

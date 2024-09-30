@@ -201,7 +201,7 @@ add_action('admin_enqueue_scripts', 'enqueue_custom_admin_script');
 
 
 function render_user_credits_admin_page() {
-    // Handle addition and subtraction of credits
+    // Handle addition and subtraction of credits for pre-pay users
     if (isset($_POST['action'], $_POST['user_id']) && in_array($_POST['action'], ['add', 'subtract']) && check_admin_referer('update_user_credits_nonce')) {
         $user_id = intval($_POST['user_id']);
         $current_credits = intval(get_user_meta($user_id, '_user_credits', true));
@@ -211,7 +211,7 @@ function render_user_credits_admin_page() {
         echo "<div class='notice notice-success'><p>User credits updated successfully.</p></div>";
     }
 
-    // Fetch users with credits
+    // Fetch pre-pay users with credits
     $args = [
         'meta_key' => '_user_credits',
         'meta_value' => '0',
@@ -220,20 +220,29 @@ function render_user_credits_admin_page() {
     ];
     $users_with_credits = get_users($args);
 
+    // Fetch post-pay users
+    $post_pay_users = get_users([
+        'role' => 'post_pay',
+        'fields' => 'all_with_meta',
+    ]);
+
     echo '<div class="wrap"><h1>User Credits Management</h1>';
     wp_nonce_field('update_user_credits_nonce');
 
     // Table headers
-    echo '<table class="wp-list-table widefat fixed striped"><thead><tr><th>User</th><th>Credits</th><th>Actions</th></tr></thead><tbody>';
+    echo '<table class="wp-list-table widefat fixed striped"><thead><tr><th>User</th><th>Credits</th><th>Lead Reception</th><th>Actions</th></tr></thead><tbody>';
 
+    // Display pre-pay users with credits
     foreach ($users_with_credits as $user) {
         $current_credits = get_user_meta($user->ID, '_user_credits', true);
         $edit_user_link = get_edit_user_link($user->ID);
-        
-        // User row with Edit link
+
         echo "<tr><td><a href='{$edit_user_link}'>{$user->display_name}</a> ({$user->user_email})</td><td>{$current_credits}</td>";
 
-        // Action buttons
+        // Lead reception for pre-pay users (always enabled if they have credits)
+        echo '<td>Enabled (Credits)</td>';
+
+        // Action buttons for managing credits
         echo '<td>';
         echo '<form method="post" action="" style="display: inline-block;">';
         wp_nonce_field('update_user_credits_nonce');
@@ -251,9 +260,24 @@ function render_user_credits_admin_page() {
         echo '</td></tr>';
     }
 
+    // Display post-pay users
+    foreach ($post_pay_users as $user) {
+        $lead_reception = get_user_meta($user->ID, 'enable_lead_reception', true) === '1' ? 'Enabled' : 'Disabled';
+        $edit_user_link = get_edit_user_link($user->ID);
+
+        echo "<tr><td><a href='{$edit_user_link}'>{$user->display_name}</a> ({$user->user_email})</td><td>N/A (Post Pay)</td>";
+
+        // Lead reception status for post-pay users
+        echo "<td>{$lead_reception}</td>";
+
+        // No action buttons for post-pay users (no credits to manage)
+        echo '<td>N/A</td></tr>';
+    }
+
     echo '</tbody></table>';
     echo '</div>';
 }
+
 function render_lead_management_page() {
     // Nonce field for security
     $nonce_action = 'lead_management_filter_action';
@@ -307,29 +331,65 @@ function render_lead_management_page() {
 
 
 function render_regions_and_users_admin_page() {
-    echo '<div class="wrap"><h1>Regions and Users with Credits</h1>';
+    echo '<div class="wrap"><h1>Regions and Users</h1>';
     
-    $users_by_region = get_customers_by_region();
-    $all_users = get_users();
+    // Fetch users with credits (pre-pay) and post-pay users
+    $users_with_credits = get_users([
+        'meta_key' => '_user_credits',
+        'meta_value' => '0',
+        'meta_compare' => '>',
+        'fields' => 'all_with_meta',
+    ]);
+
+    $post_pay_users = get_users([
+        'role' => 'post_pay',
+        'fields' => 'all_with_meta',
+    ]);
+
+    // Merge both pre-pay and post-pay users
+    $all_users = array_merge($users_with_credits, $post_pay_users);
+
+    // Load postcodes assigned to users (based on your `get_customers_by_region` logic)
+    $users_by_region = get_customers_by_region(); // Assuming this groups users by region
+
+    if (empty($users_by_region)) {
+        echo "<p>No users found for the regions.</p>";
+        return;
+    }
 
     foreach ($users_by_region as $region => $user_ids) {
         echo "<h2>" . esc_html($region) . "</h2>";
 
-        // Display users and their credits for the region
         foreach ($user_ids as $user_id) {
             $user_info = get_userdata($user_id);
+
+            // Skip users that are not in pre-pay or post-pay roles
+            if (!$user_info) {
+                continue;
+            }
+
+            $is_post_pay = in_array('post_pay', $user_info->roles);
             $user_credits = get_user_meta($user_id, '_user_credits', true);
+
+            // Get the lead reception status for post-pay users
+            $lead_reception = $is_post_pay ? (get_user_meta($user_id, 'enable_lead_reception', true) === '1' ? 'Enabled' : 'Disabled') : 'N/A';
+
+            // Retrieve the user's selected postcode areas (assuming stored in user meta)
             $selected_postcode_areas = json_decode(get_user_meta($user_id, 'selected_postcode_areas', true), true);
 
-            // Generate the edit user link
+            // Display user info and links
             $edit_user_link = get_edit_user_link($user_id);
+            echo "<p><strong><a href='" . esc_url($edit_user_link) . "'>" . esc_html($user_info->display_name) . "</a> ({$user_info->user_email})</strong>: ";
 
-            // Display the user's name as a link to their edit page
-            echo "<p><strong><a href='" . esc_url($edit_user_link) . "'>" . esc_html($user_info->display_name) . "</a> (" . esc_html($user_info->user_email) . ")</strong>: ";
-            echo "Credits: " . esc_html($user_credits) . "; ";
+            // Show credits for pre-pay users and lead reception for post-pay users
+            if ($is_post_pay) {
+                echo "Lead Reception: {$lead_reception}";
+            } else {
+                echo "Credits: {$user_credits}";
+            }
 
-            // Show postcodes covered by the user in this region
-            echo "Postcodes: ";
+            // Display the user's assigned postcodes for the region
+            echo "; Postcodes: ";
             if (!empty($selected_postcode_areas[$region])) {
                 echo implode(', ', $selected_postcode_areas[$region]);
             } else {
@@ -339,6 +399,329 @@ function render_regions_and_users_admin_page() {
             echo "</p>";
         }
     }
-
+    echo '<pre>';
+    print_r($users_by_region);
+    echo '</pre>';
     echo '</div>';
 }
+
+
+function render_lead_reports_page() {
+    // Nonce field for security
+    $nonce_action = 'lead_reports_filter_action';
+    $nonce_name = 'lead_reports_filter_nonce';
+
+    // Display page title
+    echo '<div class="wrap"><h1>Lead Reports</h1>';
+
+    // Start the form for filters
+    echo '<form id="lead-reports-filters" method="GET">';
+    echo '<input type="hidden" name="page" value="lead-reports"/>';
+
+    // Add nonce for security
+    wp_nonce_field($nonce_action, $nonce_name);
+
+    // Dropdown for filtering by date
+    $selected_filter = isset($_GET['lead_date_filter']) ? $_GET['lead_date_filter'] : 'today';
+    ?>
+    <select name="lead_date_filter">
+        <option value="today" <?php selected($selected_filter, 'today'); ?>>Today</option>
+        <option value="yesterday" <?php selected($selected_filter, 'yesterday'); ?>>Yesterday</option>
+        <option value="this_week" <?php selected($selected_filter, 'this_week'); ?>>This Week</option>
+        <option value="last_week" <?php selected($selected_filter, 'last_week'); ?>>Last Week</option>
+        <option value="this_month" <?php selected($selected_filter, 'this_month'); ?>>This Month</option>
+        <option value="last_month" <?php selected($selected_filter, 'last_month'); ?>>Last Month</option>
+    </select>
+    <?php
+    // Submit button for the filters
+    submit_button('Filter', 'primary', 'filter_action', false);
+    echo '</form>';
+
+    // Fetch the data based on the selected filter
+    $date_query = get_lead_date_query($selected_filter);
+
+    // Query the leads based on the date range and group by assigned_user meta field
+    $args = [
+        'post_type' => 'lead', // Assuming 'lead' is the post type for leads
+        'posts_per_page' => -1,
+        'meta_key' => 'assigned_user', // Meta key for assigned user
+        'date_query' => $date_query,
+        'fields' => 'ids', // Only get the post IDs to count
+    ];
+
+    $leads = new WP_Query($args);
+
+    // Debugging information: Show the total number of leads found
+    echo '<h2>Total Leads: ' . $leads->found_posts . '</h2>';
+
+    // Check if there are leads and display them
+    if ($leads->have_posts()) {
+        echo '<h3>Leads found for the selected period.</h3>';
+
+        // Initialize an array to store lead counts by assigned user
+        $user_lead_counts = [];
+
+        // Loop through all leads and count them per assigned user
+        foreach ($leads->posts as $lead_id) {
+            $assigned_user_id = get_post_meta($lead_id, 'assigned_user', true);
+
+            if (!empty($assigned_user_id)) {
+                // Increment the lead count for the assigned user
+                if (!isset($user_lead_counts[$assigned_user_id])) {
+                    $user_lead_counts[$assigned_user_id] = 0;
+                }
+                $user_lead_counts[$assigned_user_id]++;
+            }
+        }
+
+        // Display the lead counts in a table
+        echo '<h2>Number of Leads Per User</h2>';
+        echo '<table class="wp-list-table widefat fixed striped">';
+        echo '<thead><tr><th>User</th><th>Leads Count</th></tr></thead><tbody>';
+
+        foreach ($user_lead_counts as $user_id => $lead_count) {
+            $user_info = get_userdata($user_id);
+            $user_display_name = $user_info ? $user_info->display_name : 'Unknown User';
+
+            echo "<tr>";
+            echo "<td>{$user_display_name}</td>";
+            echo "<td>{$lead_count}</td>";
+            echo "</tr>";
+        }
+
+        echo '</tbody></table>';
+    } else {
+        echo '<p>No leads found for the selected period.</p>';
+    }
+
+    wp_reset_postdata();
+    echo '</div>';
+}
+
+function get_lead_date_query($selected_filter) {
+    $start_of_week = get_option('start_of_week', 0); // 0 (Sunday) to 6 (Saturday)
+    $current_day_of_week = date('w'); // Current day of week
+
+    $date_query = [];
+
+    switch ($selected_filter) {
+        case 'today':
+            $today = current_time('Y-m-d');
+            $date_query = [
+                'after' => $today . ' 00:00:00',
+                'before' => $today . ' 23:59:59',
+                'inclusive' => true,
+            ];
+            break;
+        case 'yesterday':
+            $yesterday = date('Y-m-d', strtotime('-1 day'));
+            $date_query = [
+                'after' => $yesterday . ' 00:00:00',
+                'before' => $yesterday . ' 23:59:59',
+                'inclusive' => true,
+            ];
+            break;
+        case 'this_week':
+            $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
+            $startOfWeek = date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
+            $endOfWeek = date('Y-m-d', strtotime($startOfWeek . ' +6 days'));
+            $date_query = [
+                'after' => $startOfWeek . ' 00:00:00',
+                'before' => $endOfWeek . ' 23:59:59',
+                'inclusive' => true,
+            ];
+            break;
+        case 'last_week':
+            $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
+            $startOfThisWeek = date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
+            $startOfLastWeek = date('Y-m-d', strtotime($startOfThisWeek . ' -7 days'));
+            $endOfLastWeek = date('Y-m-d', strtotime($startOfThisWeek . ' -1 day'));
+            $date_query = [
+                'after' => $startOfLastWeek . ' 00:00:00',
+                'before' => $endOfLastWeek . ' 23:59:59',
+                'inclusive' => true,
+            ];
+            break;
+        case 'this_month':
+            $start_of_month = date('Y-m-01');
+            $date_query = [
+                'after' => $start_of_month . ' 00:00:00',
+                'inclusive' => true,
+            ];
+            break;
+        case 'last_month':
+            $start_of_last_month = date('Y-m-01', strtotime('first day of last month'));
+            $end_of_last_month = date('Y-m-t', strtotime('last day of last month'));
+            $date_query = [
+                'after' => $start_of_last_month . ' 00:00:00',
+                'before' => $end_of_last_month . ' 23:59:59',
+                'inclusive' => true,
+            ];
+            break;
+        // Add other cases as needed
+    }
+
+    return $date_query;
+}
+
+function load_postcodes_from_json() {
+    $file_path = plugin_dir_path(__FILE__) . '../includes/postcodes.json';
+    $json_data = file_get_contents($file_path);
+    return json_decode($json_data, true);
+}
+// Main report rendering function
+// Main report rendering function
+function render_leads_by_postcode_report() {
+    echo '<div class="wrap"><h1>Leads by Postcode Area Report</h1>';
+
+    // Handle the time filter selection
+    $selected_filter = isset($_GET['lead_date_filter']) ? $_GET['lead_date_filter'] : 'today';
+    $order_by = isset($_GET['order_by']) ? $_GET['order_by'] : 'leads';
+    $order = isset($_GET['order']) ? $_GET['order'] : 'desc';
+
+    // Time filter dropdown
+    echo '<form method="GET">';
+    echo '<input type="hidden" name="page" value="leads-by-postcode-report"/>';
+    ?>
+    <label for="lead_date_filter">Filter by date: </label>
+    <select name="lead_date_filter">
+        <option value="today" <?php selected($selected_filter, 'today'); ?>>Today</option>
+        <option value="yesterday" <?php selected($selected_filter, 'yesterday'); ?>>Yesterday</option>
+        <option value="this_week" <?php selected($selected_filter, 'this_week'); ?>>This Week</option>
+        <option value="last_week" <?php selected($selected_filter, 'last_week'); ?>>Last Week</option>
+        <option value="this_month" <?php selected($selected_filter, 'this_month'); ?>>This Month</option>
+        <option value="last_month" <?php selected($selected_filter, 'last_month'); ?>>Last Month</option>
+    </select>
+    <?php
+    submit_button('Filter', 'primary', 'filter_action', false);
+    echo '</form>';
+
+    // Load the postcode areas from the JSON file
+    $postcode_areas = load_postcodes_from_json();
+
+    // Initialize array to store lead counts per postcode area
+    $lead_counts_by_area = [];
+
+    // Fetch the date query based on the selected filter
+    $date_query = get_lead_date_query($selected_filter);
+
+    // Fetch all leads (assuming 'lead' is the post type)
+    $args = [
+        'post_type' => 'lead',
+        'posts_per_page' => -1,
+        'fields' => 'ids', // Only get post IDs to speed up the query
+        'date_query' => [$date_query], // Apply the date filter
+    ];
+
+    $leads = new WP_Query($args);
+
+    if ($leads->have_posts()) {
+        // Loop through each lead
+        foreach ($leads->posts as $lead_id) {
+            $lead_postcode = get_post_meta($lead_id, 'postcode', true);
+
+            // Match the lead's postcode against the postcode areas
+            foreach ($postcode_areas as $region => $postcodes) {
+                foreach ($postcodes as $postcode) {
+                    // Handle wildcard postcodes (e.g., "E#" matches "E1", "E2", etc.)
+                    if (strpos($postcode, "#") !== false) {
+                        $pattern = str_replace("#", "[0-9]", $postcode);
+                        if (preg_match("/^$pattern/", $lead_postcode)) {
+                            if (!isset($lead_counts_by_area[$postcode])) {
+                                $lead_counts_by_area[$postcode] = ['region' => $region, 'count' => 0];
+                            }
+                            $lead_counts_by_area[$postcode]['count']++;
+                        }
+                    } else {
+                        // Direct match for postcodes without wildcards
+                        if (strpos($lead_postcode, $postcode) === 0) {
+                            if (!isset($lead_counts_by_area[$postcode])) {
+                                $lead_counts_by_area[$postcode] = ['region' => $region, 'count' => 0];
+                            }
+                            $lead_counts_by_area[$postcode]['count']++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Sorting logic
+    $order = strtolower($order);
+
+    if ($order_by === 'leads') {
+        uasort($lead_counts_by_area, function($a, $b) use ($order) {
+            if ($a['count'] == $b['count']) {
+                return 0;
+            }
+            if ($order === 'asc') {
+                return ($a['count'] < $b['count']) ? -1 : 1;
+            } else {
+                return ($a['count'] > $b['count']) ? -1 : 1;
+            }
+        });
+        $sorted_lead_counts = $lead_counts_by_area;
+    } else {
+        $sorted_lead_counts = $lead_counts_by_area;
+    }
+
+    // Display the report with the total count
+    $total_leads = array_sum(array_column($lead_counts_by_area, 'count'));
+    echo '<h2>Total Leads: ' . $total_leads . '</h2>';
+
+    // Column headers with sorting links
+    $new_order = ($order === 'asc') ? 'desc' : 'asc';
+    $leads_url = add_query_arg([
+        'order_by' => 'leads',
+        'order' => $new_order,
+        'lead_date_filter' => $selected_filter,
+    ], menu_page_url('leads-by-postcode-report', false));
+
+    echo '<table class="wp-list-table widefat fixed striped">';
+    echo '<thead>';
+    echo '<tr>';
+    echo '<th>Region</th>';
+    echo '<th>Postcode</th>';
+    echo '<th><a href="' . esc_url($leads_url) . '">Leads Count</a></th>';
+    echo '</tr>';
+    echo '</thead>';
+    echo '<tbody>';
+
+    foreach ($sorted_lead_counts as $postcode => $data) {
+        echo '<tr>';
+        echo '<td>' . esc_html($data['region']) . '</td>';
+        echo '<td>' . esc_html($postcode) . '</td>';
+        echo '<td>' . esc_html($data['count']) . '</td>';
+        echo '</tr>';
+    }
+
+    echo '</tbody></table>';
+
+    wp_reset_postdata(); // Always reset the query after a custom WP_Query
+    echo '</div>';
+}
+
+
+add_action('admin_menu', function() {
+    add_submenu_page(
+        'lead-management-dashboard',  // Parent menu slug
+        'Leads by Postcode Area',     // Page title
+        'Leads by Postcode Area',     // Menu title
+        'manage_options',             // Capability
+        'leads-by-postcode-report',   // Menu slug
+        'render_leads_by_postcode_report' // Callback function to render the page
+    );
+});
+function register_lead_report_menu_page() {
+    // Add "Lead Reports" as the first submenu under 'Lead Management Dashboard'
+    add_submenu_page(
+        'lead-management-dashboard',   // Parent menu slug
+        'Lead Reports',                // Page title
+        'Lead Reports',                // Menu title
+        'manage_options',              // Capability required
+        'lead-reports',                // Menu slug
+        'render_lead_reports_page',    // Function to render the page
+        0                              // Position - 0 makes it the first item
+    );
+}
+add_action('admin_menu', 'register_lead_report_menu_page');

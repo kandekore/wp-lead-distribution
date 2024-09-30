@@ -20,19 +20,67 @@
 //     }
 // }
 
+// function get_customers_by_region() {
+//     $postcode_areas = load_postcode_areas_from_json(); // Load regions and their postcodes
+//     $users_by_region = [];
+
+//     $users = get_users();
+//     foreach ($users as $user) {
+//         // Fetch user's selected postcode areas
+//         $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
+
+//         // Check the user's credits
+//         $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
+
+//         if (!empty($selected_postcode_areas) && $user_credits > 0) { // Include credit check here
+//             foreach ($selected_postcode_areas as $region => $codes) {
+//                 foreach ($postcode_areas as $available_region => $available_codes) {
+//                     // If the user-selected region matches available regions and codes
+//                     if ($region === $available_region) {
+//                         foreach ($codes as $code) {
+//                             // Checking for both direct matches and wildcard matches
+//                             $codePattern = rtrim($code, "*") . ".*"; // Convert to regex pattern
+//                             foreach ($available_codes as $available_code) {
+//                                 if (preg_match("/^$codePattern/", $available_code)) {
+//                                     // Add user to the corresponding region
+//                                     if (!isset($users_by_region[$region])) {
+//                                         $users_by_region[$region] = [];
+//                                     }
+//                                     if (!in_array($user->ID, $users_by_region[$region])) {
+//                                         $users_by_region[$region][] = $user->ID;
+//                                     }
+//                                     break 2; // Break out of both loops since we only need to add the user once
+//                                 }
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     return $users_by_region;
+// }
+
 function get_customers_by_region() {
     $postcode_areas = load_postcode_areas_from_json(); // Load regions and their postcodes
     $users_by_region = [];
 
+    // Fetch all users
     $users = get_users();
+    
     foreach ($users as $user) {
         // Fetch user's selected postcode areas
         $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
 
-        // Check the user's credits
+        // Check the user's role and credits
         $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
+        $is_post_pay = in_array('post_pay', $user->roles);
+        $lead_reception_enabled = get_user_meta($user->ID, 'enable_lead_reception', true) === '1';
 
-        if (!empty($selected_postcode_areas) && $user_credits > 0) { // Include credit check here
+        // Include the user if they are pre-pay with credits or post-pay with lead reception enabled
+        if (!empty($selected_postcode_areas) && 
+           (($user_credits > 0) || ($is_post_pay && $lead_reception_enabled))) {
             foreach ($selected_postcode_areas as $region => $codes) {
                 foreach ($postcode_areas as $available_region => $available_codes) {
                     // If the user-selected region matches available regions and codes
