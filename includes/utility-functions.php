@@ -240,3 +240,182 @@ function search_lead_id_in_admin($search, $wp_query) {
     return $search;
 }
 
+// Add meta box to lead post type
+function add_lead_resend_meta_box() {
+    add_meta_box(
+        'lead_resend_meta_box',
+        'Resend Lead',
+        'render_lead_resend_meta_box',
+        'lead',
+        'side', // Display this meta box on the side
+        'default'
+    );
+}
+add_action('add_meta_boxes', 'add_lead_resend_meta_box');
+
+// Render the meta box
+// Render the meta box
+function render_lead_resend_meta_box($post) {
+    // Retrieve the existing resend message if available
+    $resend_message = get_post_meta($post->ID, '_lead_resend_message', true);
+    $resend_checked = get_post_meta($post->ID, '_lead_resend_checked', true);
+    $resend_count = (int)get_post_meta($post->ID, '_lead_resend_count', true);
+
+    // Display the fields
+    ?>
+    <label for="lead_resend">
+        <input type="checkbox" name="lead_resend" id="lead_resend" value="1" <?php checked($resend_checked, '1'); ?>>
+        Resend this lead
+    </label>
+    <br><br>
+    <label for="lead_resend_message">Resend Message</label><br>
+    <textarea name="lead_resend_message" id="lead_resend_message" rows="4" style="width:100%;"><?php echo esc_textarea($resend_message); ?></textarea>
+    <br><br>
+
+    <?php if ($resend_count > 0) : ?>
+        <p><strong><?php echo esc_html($resend_count); ?></strong> <?php echo _n('resend', 'resends', $resend_count, 'text-domain'); ?> have been made for this lead.</p>
+    <?php endif; ?>
+
+    <?php
+    wp_nonce_field('save_lead_resend_meta_box_data', 'lead_resend_meta_box_nonce');
+}
+
+
+// Save the checkbox and message data
+function save_lead_resend_meta_box_data($post_id) {
+    // Verify the nonce to ensure the request is valid
+    if (!isset($_POST['lead_resend_meta_box_nonce']) || !wp_verify_nonce($_POST['lead_resend_meta_box_nonce'], 'save_lead_resend_meta_box_data')) {
+        return;
+    }
+
+    // Ensure it's not an autosave
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+        return;
+    }
+
+    // Check the user's permission
+    if (!current_user_can('edit_post', $post_id)) {
+        return;
+    }
+
+    // Save the checkbox
+    if (isset($_POST['lead_resend'])) {
+        update_post_meta($post_id, '_lead_resend_checked', '1');
+    } else {
+        update_post_meta($post_id, '_lead_resend_checked', '0');
+    }
+
+    // Save the message
+    if (isset($_POST['lead_resend_message'])) {
+        update_post_meta($post_id, '_lead_resend_message', sanitize_textarea_field($_POST['lead_resend_message']));
+    }
+}
+add_action('save_post', 'save_lead_resend_meta_box_data');
+
+// Hook into the post save action to check if resend is triggered
+function maybe_resend_lead($post_id) {
+    // Only trigger for lead post type
+    if (get_post_type($post_id) !== 'lead') {
+        return;
+    }
+
+    // Check if the resend checkbox is checked
+    $resend_checked = get_post_meta($post_id, '_lead_resend_checked', true);
+    if ($resend_checked === '1') {
+        // Get the lead owner (author)
+        $lead_owner_id = get_post_field('post_author', $post_id);
+        $lead_owner = get_userdata($lead_owner_id);
+
+        // Get the resend message from the custom textbox
+        $resend_message = get_post_meta($post_id, '_lead_resend_message', true);
+
+        // Get the lead details (you can customize this part to include the relevant lead information)
+        $lead_details = get_post($post_id)->post_content; // Assuming lead data is in post_content
+
+        // Send email and SMS using the send_lead_email_to_user function
+        $lead_data = [
+            'leadid' => get_post_meta($post_id, 'leadid', true),
+            'registration' => get_post_meta($post_id, 'registration', true),
+            'model' => get_post_meta($post_id, 'model', true),
+            // Add any other lead details you want to include here
+        ];
+
+        // Include the resend message in the lead details
+        $lead_data['resend_message'] = $resend_message;
+
+        // Send lead details via email and SMS (using @txtlocal)
+        $mail_sent = resend_lead_email_to_user($lead_owner_id, $lead_data);
+
+        if ($mail_sent) {
+            // Optionally add a flag to mark that the lead has been resent
+            update_post_meta($post_id, '_lead_resent', '1');
+
+            // Uncheck the resend box to prevent resending on the next save
+            update_post_meta($post_id, '_lead_resend_checked', '0');
+
+            // Log the resend action
+            $resend_count = (int)get_post_meta($post_id, '_lead_resend_count', true);
+            $resend_count++;
+            update_post_meta($post_id, '_lead_resend_count', $resend_count);
+
+            // Notify admin of successful resend
+            add_action('admin_notices', function() {
+                ?>
+                <div class="notice notice-success is-dismissible">
+                    <p><?php _e('The lead has been successfully resent via email and SMS.', 'text-domain'); ?></p>
+                </div>
+                <?php
+            });
+        } else {
+            add_action('admin_notices', function() {
+                ?>
+                <div class="notice notice-error is-dismissible">
+                    <p><?php _e('Failed to resend the lead.', 'text-domain'); ?></p>
+                </div>
+                <?php
+            });
+        }
+    }
+}
+add_action('save_post', 'maybe_resend_lead');
+
+function resend_lead_email_to_user($user_id, $lead_data) {
+    // Retrieve user's email address
+    $user_info = get_userdata($user_id);
+    $to = $user_info->user_email;
+
+    // Retrieve user's phone number from user meta data
+    $user_phone = get_user_meta($user_id, 'billing_phone', true);
+
+    // Construct the email address from the phone number for @txtlocal
+    $phone_email = $user_phone . '@txtlocal.co.uk';
+
+    // Set the subject of the email
+    $subject = "Resend Lead: " . $lead_data['leadid'];
+
+    // Start of the HTML email body
+    $body = "<html><body>";
+    $body .= "<h3>Resent Lead Details</h3>"."%n";
+
+    // Assuming 'registration' and 'model' are important and should be highlighted
+    if (isset($lead_data['registration']) && isset($lead_data['model'])) {
+        $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>" ."%n";
+    }
+
+    // Add the custom message from the resend form
+    if (isset($lead_data['resend_message']) && !empty($lead_data['resend_message'])) {
+        $body .= "<p><strong>Message:</strong> " . esc_html($lead_data['resend_message']) . "</p>";
+    }
+
+    // End of the HTML email body
+    $body .= "</body></html>";
+
+    // Set headers for CC recipient (SMS via txtlocal)
+    $headers = array(
+        'Content-Type: text/html; charset=UTF-8',
+        'Cc: ' . $phone_email // Include the CC recipient directly in the headers
+    );
+
+    // Send email using wp_mail(), specifying CC recipient in headers
+    return wp_mail($to, $subject, $body, $headers);
+}
