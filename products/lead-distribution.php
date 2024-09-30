@@ -109,3 +109,36 @@ function get_customers_by_region() {
 
     return $users_by_region;
 }
+// Add Disable Lead Reception option in the user profile page for subscribers
+add_action('show_user_profile', 'add_disable_lead_reception_option');
+add_action('edit_user_profile', 'add_disable_lead_reception_option');
+
+function add_disable_lead_reception_option($user) {
+    // Only show this option for subscribers
+    if (in_array('subscriber', $user->roles)) {
+        ?>
+        <h3><?php _e("Disable Lead Reception", "text-domain"); ?></h3>
+        <table class="form-table">
+            <tr>
+                <th><label for="disable_lead_reception"><?php _e("Disable Lead Reception", "text-domain"); ?></label></th>
+                <td>
+                    <input type="checkbox" name="disable_lead_reception" id="disable_lead_reception" value="1" <?php checked(get_user_meta($user->ID, 'disable_lead_reception', true), '1'); ?> />
+                    <label for="disable_lead_reception"><?php _e("Check this box to prevent the user from receiving leads", "text-domain"); ?></label>
+                </td>
+            </tr>
+        </table>
+        <?php
+    }
+}
+
+// Save the Disable Lead Reception option for subscribers
+add_action('personal_options_update', 'save_disable_lead_reception_option');
+add_action('edit_user_profile_update', 'save_disable_lead_reception_option');
+
+function save_disable_lead_reception_option($user_id) {
+    // Only save for subscribers
+    $user = get_userdata($user_id);
+    if (in_array('subscriber', $user->roles)) {
+        update_user_meta($user_id, 'disable_lead_reception', isset($_POST['disable_lead_reception']) ? '1' : '0');
+    }
+}

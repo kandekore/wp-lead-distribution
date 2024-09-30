@@ -232,10 +232,13 @@ function get_eligible_recipients_for_lead($postcode_prefix, $lead_vin) {
                 }
             }
         }
-        // If the user is not post-pay, check if they have credits
-        else {
+        // For non-post-pay users (including subscribers), check credits and lead reception disable option
+        elseif (!in_array('post_pay', $user->roles)) {
+            // Check if lead reception is disabled for this user (subscriber or others)
+            $lead_reception_disabled = get_user_meta($user->ID, 'disable_lead_reception', true);
             $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
-            if ($user_credits > 0 && !empty($selected_postcode_areas)) {
+
+            if ($user_credits > 0 && empty($lead_reception_disabled) && !empty($selected_postcode_areas)) {
                 foreach ($selected_postcode_areas as $region => $codes) {
                     foreach ($codes as $code) {
                         // Replace "#" with regex pattern to match any single digit
@@ -256,8 +259,6 @@ function get_eligible_recipients_for_lead($postcode_prefix, $lead_vin) {
 
     return $eligible_recipients;
 }
-
-
 
 // Helper function to filter out users who already own a lead with the same VIN
 function filter_out_lead_owners_by_vin($eligible_recipients, $lead_vin) {
