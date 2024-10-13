@@ -6,7 +6,7 @@ function process_lead_submission(WP_REST_Request $request) {
     // Extract relevant data from the request
     $lead_data = [
         'postcode' => strtoupper(sanitize_text_field($request->get_param('postcode'))),
-        'registration' => strtoupper(sanitize_text_field($request->get_param('reg'))),
+        'registration' => strtoupper(sanitize_text_field($request->get_param('vrg'))),
         'model' => sanitize_text_field($request->get_param('model')),
         'date' => sanitize_text_field($request->get_param('date')),
         'cylinder' => sanitize_text_field($request->get_param('cylinder')),

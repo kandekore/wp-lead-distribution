@@ -1,7 +1,7 @@
 {
     "TEMP": ["KT", "TW", "SO", "PO", "SP", "RH", "KT"],
     "London": ["E#", "EC", "N#", "NW", "SE", "SW", "W#", "WC"],
-    "South East England": ["BN", "BR", "CR", "CT", "DA", "GU", "HP", "ME", "MK", "OX", "PO", "RG", "RH", "SL", "SM", "SN", "SO", "TN", "UB", "WD", "HA"],
+    "South East England": ["BN", "BR", "CR", "CT", "DA", "GU", "HP", "ME", "MK", "OX", "PO", "RG", "RH", "SL", "SM", "SN", "SO", "TN", "UB", "WD", "HA", "RM","IG"],
     "South West England": ["BA", "BH", "BS", "DT", "EX", "GL", "PL", "SA", "SP", "TA", "TQ", "TR"],
     "West Midlands": ["B#", "CV", "DY", "HR", "ST", "TF", "WR", "WS", "WV"],
     "East Midlands": ["DE", "LE", "LN", "NG", "NN"],
