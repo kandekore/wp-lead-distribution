@@ -221,32 +221,41 @@ function get_eligible_recipients_for_lead($postcode_prefix, $lead_vin) {
             if (!empty($selected_postcode_areas)) {
                 foreach ($selected_postcode_areas as $region => $codes) {
                     foreach ($codes as $code) {
-                        // Replace "#" with regex pattern to match any single digit
                         $codePattern = str_replace("#", "[0-9]", $code);
-                        // Check if the lead's postcode prefix matches the customer's postcode pattern
                         if (preg_match("/^$codePattern/", $postcode_prefix)) {
+                            // Add the user to the eligible recipients array
                             $eligible_recipients[] = $user->ID;
-                            break 2; // Match found, no need to continue checking
+
+                            // Check if the user has lead priority enabled
+                            if (get_user_meta($user->ID, 'lead_priority', true) === '1') {
+                                // Add the user 3x to increase their chances
+                                $eligible_recipients[] = $user->ID;
+                                $eligible_recipients[] = $user->ID;
+                                $eligible_recipients[] = $user->ID;
+                            }
+                            break 2;
                         }
                     }
                 }
             }
-        }
-        // For non-post-pay users (including subscribers), check credits and lead reception disable option
-        elseif (!in_array('post_pay', $user->roles)) {
-            // Check if lead reception is disabled for this user (subscriber or others)
+        } elseif (!in_array('post_pay', $user->roles)) {
             $lead_reception_disabled = get_user_meta($user->ID, 'disable_lead_reception', true);
-            $user_credits = (int)get_user_meta($user->ID, '_user_credits', true);
+            $user_credits = (int) get_user_meta($user->ID, '_user_credits', true);
 
             if ($user_credits > 0 && empty($lead_reception_disabled) && !empty($selected_postcode_areas)) {
                 foreach ($selected_postcode_areas as $region => $codes) {
                     foreach ($codes as $code) {
-                        // Replace "#" with regex pattern to match any single digit
                         $codePattern = str_replace("#", "[0-9]", $code);
-                        // Check if the lead's postcode prefix matches the customer's postcode pattern
                         if (preg_match("/^$codePattern/", $postcode_prefix)) {
+                            // Add the user to the eligible recipients array
                             $eligible_recipients[] = $user->ID;
-                            break 2; // Match found, no need to continue checking
+
+                            // Check if the user has lead priority enabled
+                            if (get_user_meta($user->ID, 'lead_priority', true) === '1') {
+                                // Add the user again to increase their chances
+                                $eligible_recipients[] = $user->ID;
+                            }
+                            break 2;
                         }
                     }
                 }
@@ -254,11 +263,12 @@ function get_eligible_recipients_for_lead($postcode_prefix, $lead_vin) {
         }
     }
 
-    // Now remove users who already own a lead with the same VIN
+    // Remove users who already own a lead with the same VIN
     $eligible_recipients = filter_out_lead_owners_by_vin($eligible_recipients, $lead_vin);
 
     return $eligible_recipients;
 }
+
 
 // Helper function to filter out users who already own a lead with the same VIN
 function filter_out_lead_owners_by_vin($eligible_recipients, $lead_vin) {

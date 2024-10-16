@@ -419,3 +419,32 @@ function resend_lead_email_to_user($user_id, $lead_data) {
     // Send email using wp_mail(), specifying CC recipient in headers
     return wp_mail($to, $subject, $body, $headers);
 }
+// Add the checkbox field to the user profile
+add_action('show_user_profile', 'add_lead_priority_checkbox');
+add_action('edit_user_profile', 'add_lead_priority_checkbox');
+
+function add_lead_priority_checkbox($user) {
+    ?>
+    <h3>Lead Reception Priority</h3>
+    <table class="form-table">
+        <tr>
+            <th><label for="lead_priority">Increase Lead Reception Probability</label></th>
+            <td>
+                <input type="checkbox" name="lead_priority" id="lead_priority" value="1" <?php checked(get_user_meta($user->ID, 'lead_priority', true), '1'); ?> />
+                <span class="description">Check this box to increase the probability of receiving leads.</span>
+            </td>
+        </tr>
+    </table>
+    <?php
+}
+
+// Save the checkbox value
+add_action('personal_options_update', 'save_lead_priority_checkbox');
+add_action('edit_user_profile_update', 'save_lead_priority_checkbox');
+
+function save_lead_priority_checkbox($user_id) {
+    if (current_user_can('edit_user', $user_id)) {
+        update_user_meta($user_id, 'lead_priority', isset($_POST['lead_priority']) ? '1' : '0');
+    }
+}
+
