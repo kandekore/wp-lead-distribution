@@ -232,51 +232,52 @@ function render_user_credits_admin_page() {
     // Table headers
     echo '<table class="wp-list-table widefat fixed striped"><thead><tr><th>User</th><th>Credits</th><th>Lead Reception</th><th>Actions</th></tr></thead><tbody>';
 
-    // Display pre-pay users with credits
+   
+
+   
+
+    // Display subscriber users with credits and correct lead reception status
     foreach ($users_with_credits as $user) {
-        $current_credits = get_user_meta($user->ID, '_user_credits', true);
-        $edit_user_link = get_edit_user_link($user->ID);
+        if (in_array('subscriber', $user->roles)) {
+            $current_credits = get_user_meta($user->ID, '_user_credits', true);
+            $edit_user_link = get_edit_user_link($user->ID);
+            $lead_reception = get_user_meta($user->ID, 'disable_lead_reception', true) === '1' ? 'Disabled' : 'Enabled';
 
-        echo "<tr><td><a href='{$edit_user_link}'>{$user->display_name}</a> ({$user->user_email})</td><td>{$current_credits}</td>";
+            echo "<tr><td><a href='{$edit_user_link}'>{$user->display_name}</a> ({$user->user_email})</td><td>{$current_credits}</td>";
+            echo "<td>{$lead_reception}</td>";
+            
+            // Action buttons for managing credits for subscribers
+            echo '<td>';
+            echo '<form method="post" action="" style="display: inline-block;">';
+            wp_nonce_field('update_user_credits_nonce');
+            echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
+            echo '<input type="hidden" name="action" value="add">';
+            echo '<input type="submit" value="+1 Credits" class="button button-primary">';
+            echo '</form>';
 
-        // Lead reception for pre-pay users (always enabled if they have credits)
-        echo '<td>Enabled (Credits)</td>';
-
-        // Action buttons for managing credits
-        echo '<td>';
-        echo '<form method="post" action="" style="display: inline-block;">';
-        wp_nonce_field('update_user_credits_nonce');
-        echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
-        echo '<input type="hidden" name="action" value="add">';
-        echo '<input type="submit" value="+1 Credits" class="button button-primary">';
-        echo '</form>';
-
-        echo '<form method="post" action="" style="display: inline-block; margin-left: 10px;">';
-        wp_nonce_field('update_user_credits_nonce');
-        echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
-        echo '<input type="hidden" name="action" value="subtract">';
-        echo '<input type="submit" value="-1 Credits" class="button">';
-        echo '</form>';
-        echo '</td></tr>';
+            echo '<form method="post" action="" style="display: inline-block; margin-left: 10px;">';
+            wp_nonce_field('update_user_credits_nonce');
+            echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
+            echo '<input type="hidden" name="action" value="subtract">';
+            echo '<input type="submit" value="-1 Credits" class="button">';
+            echo '</form>';
+            echo '</td></tr>';
+        }
     }
-
-    // Display post-pay users
-    foreach ($post_pay_users as $user) {
+     // Display post-pay users
+     foreach ($post_pay_users as $user) {
         $lead_reception = get_user_meta($user->ID, 'enable_lead_reception', true) === '1' ? 'Enabled' : 'Disabled';
         $edit_user_link = get_edit_user_link($user->ID);
 
         echo "<tr><td><a href='{$edit_user_link}'>{$user->display_name}</a> ({$user->user_email})</td><td>N/A (Post Pay)</td>";
-
-        // Lead reception status for post-pay users
         echo "<td>{$lead_reception}</td>";
-
-        // No action buttons for post-pay users (no credits to manage)
         echo '<td>N/A</td></tr>';
     }
 
     echo '</tbody></table>';
     echo '</div>';
 }
+
 
 function render_lead_management_page() {
     // Nonce field for security
@@ -369,10 +370,17 @@ function render_regions_and_users_admin_page() {
             }
 
             $is_post_pay = in_array('post_pay', $user_info->roles);
+            $is_subscriber = in_array('subscriber', $user_info->roles);
             $user_credits = get_user_meta($user_id, '_user_credits', true);
 
-            // Get the lead reception status for post-pay users
-            $lead_reception = $is_post_pay ? (get_user_meta($user_id, 'enable_lead_reception', true) === '1' ? 'Enabled' : 'Disabled') : 'N/A';
+            // Determine lead reception status
+            if ($is_post_pay) {
+                $lead_reception = get_user_meta($user_id, 'enable_lead_reception', true) === '1' ? 'Enabled' : 'Disabled';
+            } elseif ($is_subscriber) {
+                $lead_reception = get_user_meta($user_id, 'disable_lead_reception', true) === '1' ? 'Disabled' : 'Enabled';
+            } else {
+                $lead_reception = 'N/A';
+            }
 
             // Retrieve the user's selected postcode areas (assuming stored in user meta)
             $selected_postcode_areas = json_decode(get_user_meta($user_id, 'selected_postcode_areas', true), true);
@@ -384,6 +392,8 @@ function render_regions_and_users_admin_page() {
             // Show credits for pre-pay users and lead reception for post-pay users
             if ($is_post_pay) {
                 echo "Lead Reception: {$lead_reception}";
+            } elseif ($is_subscriber) {
+                echo "Lead Reception: {$lead_reception} (Credits: {$user_credits})";
             } else {
                 echo "Credits: {$user_credits}";
             }
@@ -404,6 +414,7 @@ function render_regions_and_users_admin_page() {
     echo '</pre>';
     echo '</div>';
 }
+
 
 
 function render_lead_reports_page() {
