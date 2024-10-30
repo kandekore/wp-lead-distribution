@@ -474,18 +474,25 @@ function render_lead_reports_page() {
             }
         }
 
-        // Display the lead counts in a table
+        // Display the lead counts in a table with an additional column for remaining credits
         echo '<h2>Number of Leads Per User</h2>';
         echo '<table class="wp-list-table widefat fixed striped">';
-        echo '<thead><tr><th>User</th><th>Leads Count</th></tr></thead><tbody>';
+        echo '<thead><tr><th>User</th><th>Leads Count</th><th>Remaining Credits</th></tr></thead><tbody>';
 
         foreach ($user_lead_counts as $user_id => $lead_count) {
             $user_info = get_userdata($user_id);
             $user_display_name = $user_info ? $user_info->display_name : 'Unknown User';
 
+            // Retrieve the remaining credits for the user
+            $remaining_credits = get_user_meta($user_id, '_user_credits', true);
+
+            // Construct the URL for filtering by this user and the selected date
+            $url = admin_url("edit.php?post_type=lead&lead_date_filter={$selected_filter}&assigned_user={$user_id}&filter_action=Filter");
+
             echo "<tr>";
-            echo "<td>{$user_display_name}</td>";
+            echo "<td><a href='" . esc_url($url) . "'>{$user_display_name}</a></td>";
             echo "<td>{$lead_count}</td>";
+            echo "<td>{$remaining_credits}</td>";
             echo "</tr>";
         }
 
@@ -497,6 +504,8 @@ function render_lead_reports_page() {
     wp_reset_postdata();
     echo '</div>';
 }
+
+
 
 function get_lead_date_query($selected_filter) {
     $start_of_week = get_option('start_of_week', 0); // 0 (Sunday) to 6 (Saturday)
