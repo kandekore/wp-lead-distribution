@@ -337,6 +337,8 @@ function maybe_resend_lead($post_id) {
             'leadid' => get_post_meta($post_id, 'leadid', true),
             'registration' => get_post_meta($post_id, 'registration', true),
             'model' => get_post_meta($post_id, 'model', true),
+            'keepers' => get_post_meta($post_id, 'keepers', true),
+    'contact' => get_post_meta($post_id, 'contact', true),
             // Add any other lead details you want to include here
         ];
 
@@ -380,34 +382,46 @@ function maybe_resend_lead($post_id) {
 add_action('save_post', 'maybe_resend_lead');
 
 function resend_lead_email_to_user($user_id, $lead_data) {
+
+    error_log(print_r($lead_data, true));
+
     // Retrieve user's email address
     $user_info = get_userdata($user_id);
     $to = $user_info->user_email;
 
     // Retrieve user's phone number from user meta data
     $user_phone = get_user_meta($user_id, 'billing_phone', true);
-
-    // Construct the email address from the phone number for @txtlocal
     $phone_email = $user_phone . '@txtlocal.co.uk';
 
     // Set the subject of the email
     $subject = "Resend Lead: " . $lead_data['leadid'];
 
+    // Ensure custom fields are retrieved if not in $lead_data
+    $keepers = isset($lead_data['keepers']) ? $lead_data['keepers'] : get_post_meta($lead_data['ID'], 'keepers', true);
+    $contact = isset($lead_data['contact']) ? $lead_data['contact'] : get_post_meta($lead_data['ID'], 'contact', true);
+
     // Start of the HTML email body
     $body = "<html><body>";
-    $body .= "<h3>Resent Lead Details</h3>"."%n";
+    $body .= "<h3>Resent Lead Details</h3>";
 
-    // Assuming 'registration' and 'model' are important and should be highlighted
     if (isset($lead_data['registration']) && isset($lead_data['model'])) {
-        $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>" ."%n";
+        $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
     }
 
-    // Add the custom message from the resend form
+    // Add keepers and contact to the email body
+    if ($keepers) {
+        $body .= "<p><strong>Name:</strong> " . esc_html($keepers) . "</p>";
+    }
+
+    if ($contact) {
+        $body .= "<p><strong>Contact:</strong> " . esc_html($contact) . "</p>";
+    }
+
+    // Add the custom message from the resend form if available
     if (isset($lead_data['resend_message']) && !empty($lead_data['resend_message'])) {
         $body .= "<p><strong>Message:</strong> " . esc_html($lead_data['resend_message']) . "</p>";
     }
 
-    // End of the HTML email body
     $body .= "</body></html>";
 
     // Set headers for CC recipient (SMS via txtlocal)
@@ -419,10 +433,18 @@ function resend_lead_email_to_user($user_id, $lead_data) {
     // Send email using wp_mail(), specifying CC recipient in headers
     return wp_mail($to, $subject, $body, $headers);
 }
+
 // Add the checkbox field to the user profile
 add_action('show_user_profile', 'add_lead_priority_checkbox');
 add_action('edit_user_profile', 'add_lead_priority_checkbox');
 
+/*************  ✨ Codeium Command ⭐  *************/
+/**
+ * Adds a checkbox field to the user profile to allow users to increase their lead reception probability.
+ *
+ * @param WP_User $user The user object.
+ */
+/******  b1e0b10d-83b7-476c-949c-0005f4da6cf8  *******/
 function add_lead_priority_checkbox($user) {
     ?>
     <h3>Lead Reception Priority</h3>
