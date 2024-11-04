@@ -447,4 +447,33 @@ function save_lead_priority_checkbox($user_id) {
         update_user_meta($user_id, 'lead_priority', isset($_POST['lead_priority']) ? '1' : '0');
     }
 }
+//Add My Account link to the login form
+
+function my_account_link_shortcode() {
+    if ( is_user_logged_in() ) {
+        return '<div class="my-account-link" style="text-align: center;">
+                    <a href="/my-account" class="button">My Account</a>
+                </div>';
+    }
+    return '';
+}
+add_shortcode( 'my_account_link', 'my_account_link_shortcode' );
+
+// Redirect to checkout after adding to cart when 'redirect_to=checkout' is present
+// Force redirect to checkout when 'redirect_to=checkout' is present in the URL
+add_action( 'template_redirect', 'force_redirect_to_checkout' );
+function force_redirect_to_checkout() {
+    if ( isset( $_GET['redirect_to'] ) && $_GET['redirect_to'] === 'checkout' ) {
+        // Perform the add-to-cart action if 'add-to-cart' parameter is present
+        // if ( isset( $_GET['add-to-cart'] ) ) {
+        //     // Handle the add-to-cart action
+        //     WC_Form_Handler::add_to_cart_action();
+        // }
+
+        // Redirect to checkout
+        wp_safe_redirect( wc_get_checkout_url() );
+        exit;
+    }
+}
+
 

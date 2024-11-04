@@ -63,22 +63,31 @@ add_action('show_user_profile', 'display_user_postcode_selections', 1);
 add_action('edit_user_profile', 'display_user_postcode_selections', 1);
 
 // Admin edit user postcode selections
+// Admin edit user postcode selections
 function admin_edit_user_postcode_selections($user) {
-    $all_postcode_areas = json_decode(get_option('custom_postcode_areas'), true);
+    // Load all available postcodes from JSON, ensuring full list is displayed
+    $all_postcode_areas = load_postcode_areas_from_json();
+    
+    // Load user's selected postcodes
     $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
 
     echo '<h3>' . __('Edit User Postcode Areas') . '</h3>';
     echo '<table class="form-table">';
+    
     foreach ($all_postcode_areas as $region => $codes) {
         echo '<tr><th>' . esc_html($region) . '</th><td>';
+        
         foreach ($codes as $code) {
+            // Check if this postcode is already selected for the user
             $checked = !empty($selected_postcode_areas[$region]) && in_array($code, $selected_postcode_areas[$region]) ? ' checked="checked"' : '';
             echo '<label><input type="checkbox" name="postcode_areas[' . esc_attr($region) . '][]" value="' . esc_attr($code) . '"' . $checked . '> ' . esc_html($code) . '</label><br>';
         }
+        
         echo '</td></tr>';
     }
     echo '</table>';
 }
+
 add_action('show_user_profile', 'admin_edit_user_postcode_selections');
 add_action('edit_user_profile', 'admin_edit_user_postcode_selections');
 

@@ -222,7 +222,16 @@ function notify_subscription_status_change($subscription, $old_status, $new_stat
     $user_id = $subscription->get_user_id();
     
     // Check if renewal was triggered by credit depletion and avoid sending "Subscription Renewed" email
-    $renewal_order = wc_get_order($subscription->get_last_order_id());
+    $renewal_order_id = $subscription->get_meta('_subscription_renewal_order_id'); // Retrieve the renewal order ID if available
+if (!$renewal_order_id) {
+    // Get orders associated with the subscription if `get_last_order_id` is not available
+    $orders = $subscription->get_related_orders(['limit' => 1, 'order' => 'DESC']);
+    $renewal_order_id = !empty($orders) ? reset($orders) : null;
+}
+
+$renewal_order = $renewal_order_id ? wc_get_order($renewal_order_id) : null;
+$triggered_by_credits_renewal = $renewal_order ? $renewal_order->get_meta('_triggered_by_credits_renewal') : false;
+
     $triggered_by_credits_renewal = $renewal_order ? $renewal_order->get_meta('_triggered_by_credits_renewal') : false;
 
     if ($new_status == 'active' && !$triggered_by_credits_renewal) {
