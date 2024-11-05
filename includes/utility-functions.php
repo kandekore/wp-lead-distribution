@@ -382,7 +382,7 @@ function maybe_resend_lead($post_id) {
 add_action('save_post', 'maybe_resend_lead');
 
 function resend_lead_email_to_user($user_id, $lead_data) {
-
+    // Log lead data for debugging
     error_log(print_r($lead_data, true));
 
     // Retrieve user's email address
@@ -396,19 +396,18 @@ function resend_lead_email_to_user($user_id, $lead_data) {
     // Set the subject of the email
     $subject = "Resend Lead: " . $lead_data['leadid'];
 
-    // Ensure custom fields are retrieved if not in $lead_data
+    // Retrieve custom fields from lead data
     $keepers = isset($lead_data['keepers']) ? $lead_data['keepers'] : get_post_meta($lead_data['ID'], 'keepers', true);
     $contact = isset($lead_data['contact']) ? $lead_data['contact'] : get_post_meta($lead_data['ID'], 'contact', true);
 
-    // Start of the HTML email body
+    // Prepare the email body without "%n" for the primary email
     $body = "<html><body>";
-    $body .= "<h3>Resent Lead Details</h3>";
+    $body .= "<h3>Customer Callback or Message Regarding Lead" . esc_html($lead_data['leadid']) . "</h3>";
 
     if (isset($lead_data['registration']) && isset($lead_data['model'])) {
-        $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
+        $body .= "<h4>". esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
     }
 
-    // Add keepers and contact to the email body
     if ($keepers) {
         $body .= "<p><strong>Name:</strong> " . esc_html($keepers) . "</p>";
     }
@@ -417,22 +416,46 @@ function resend_lead_email_to_user($user_id, $lead_data) {
         $body .= "<p><strong>Contact:</strong> " . esc_html($contact) . "</p>";
     }
 
-    // Add the custom message from the resend form if available
     if (isset($lead_data['resend_message']) && !empty($lead_data['resend_message'])) {
         $body .= "<p><strong>Message:</strong> " . esc_html($lead_data['resend_message']) . "</p>";
     }
 
     $body .= "</body></html>";
 
-    // Set headers for CC recipient (SMS via txtlocal)
-    $headers = array(
-        'Content-Type: text/html; charset=UTF-8',
-        'Cc: ' . $phone_email // Include the CC recipient directly in the headers
-    );
+    // Send the primary email without "%n" line breaks
+    $headers = array('Content-Type: text/html; charset=UTF-8');
+    $email_sent = wp_mail($to, $subject, $body, $headers);
 
-    // Send email using wp_mail(), specifying CC recipient in headers
-    return wp_mail($to, $subject, $body, $headers);
+    // Prepare the email body with "%n" for the SMS email
+    $body_sms = "<html><body>";
+    $body_sms .= "<h3>Customer Callback or Message Regarding Lead " . esc_html($lead_data['leadid']) . "</h3>%n";
+
+    if (isset($lead_data['registration']) && isset($lead_data['model'])) {
+        $body_sms .= "<h4>". esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>%n";
+    }
+
+    if ($keepers) {
+        $body_sms .= "<p><strong>Name:</strong> " . esc_html($keepers) . "</p>%n";
+    }
+
+    if ($contact) {
+        $body_sms .= "<p><strong>Contact:</strong> " . esc_html($contact) . "</p>%n";
+    }
+
+    if (isset($lead_data['resend_message']) && !empty($lead_data['resend_message'])) {
+        $body_sms .= "<p><strong>Message:</strong> " . esc_html($lead_data['resend_message']) . "</p>%n";
+    }
+
+    $body_sms .= "</body></html>";
+
+    // Send the SMS email with "%n" line breaks
+    $headers_sms = array('Content-Type: text/html; charset=UTF-8');
+    $sms_sent = wp_mail($phone_email, $subject, $body_sms, $headers_sms);
+
+    // Return true if both emails were sent successfully
+    return $email_sent && $sms_sent;
 }
+
 
 // Add the checkbox field to the user profile
 add_action('show_user_profile', 'add_lead_priority_checkbox');
