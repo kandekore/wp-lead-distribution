@@ -450,42 +450,60 @@ function send_lead_email_to_user($user_id, $lead_data) {
     // Set the subject of the email
     $subject = "New Lead: " . $lead_data['leadid'];
 
-    // Start of the HTML email body
-    $body = "<html><body>";
-    $body .= "<h3>New Lead Details</h3>"."%n";
-
-    // Assuming 'registration' and 'model' are important and should be highlighted
-    if (isset($lead_data['registration']) && isset($lead_data['model'])) {
-        $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>" ."%n";
-    }
-
-    // Manually display selected meta data
+    // Define meta keys to be included in the email
     $meta_keys = [
         'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
         'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
         'vin'
     ];
 
+    // Prepare the email body without "%n" for the primary email
+    $body = "<html><body>";
+    $body .= "<h3>New Lead Details</h3>";
+
+    // Highlight registration and model if present
+    if (isset($lead_data['registration']) && isset($lead_data['model'])) {
+        $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
+    }
+
     $body .= "<ul style='list-style-type:none;'>";
     foreach ($meta_keys as $key) {
-        if (!empty($lead_data[$key])) { // Only display if value is not empty
-            $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>"."%n";
+        if (!empty($lead_data[$key])) {
+            $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>";
         }
     }
     $body .= "</ul>";
-
-    // End of the HTML email body
     $body .= "</body></html>";
 
-    // Set headers for CC recipient
-    $headers = array(
-        'Content-Type: text/html; charset=UTF-8',
-        'Cc: ' . $phone_email // Include the CC recipient directly in the headers
-    );
+    // Send the primary email without "%n" line breaks
+    $headers = array('Content-Type: text/html; charset=UTF-8');
+    $email_sent = wp_mail($to, $subject, $body, $headers);
 
-    // Send email using wp_mail(), specifying CC recipient in headers
-    return wp_mail($to, $subject, $body, $headers);
+    // Prepare the email body with "%n" for the SMS email
+    $body_sms = "<html><body>";
+    $body_sms .= "<h3>New Lead Details</h3>%n";
+
+    if (isset($lead_data['registration']) && isset($lead_data['model'])) {
+        $body_sms .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>%n";
+    }
+
+    $body_sms .= "<ul style='list-style-type:none;'>";
+    foreach ($meta_keys as $key) {
+        if (!empty($lead_data[$key])) {
+            $body_sms .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>%n";
+        }
+    }
+    $body_sms .= "</ul>";
+    $body_sms .= "</body></html>";
+
+    // Send the SMS email with "%n" line breaks
+    $headers_sms = array('Content-Type: text/html; charset=UTF-8');
+    $sms_sent = wp_mail($phone_email, $subject, $body_sms, $headers_sms);
+
+    // Return true if both emails were sent successfully
+    return $email_sent && $sms_sent;
 }
+
 
 add_action('profile_update', 'update_user_postcode_queues', 10, 2);
 function update_user_postcode_queues($user_id, $old_user_data) {
