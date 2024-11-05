@@ -169,7 +169,25 @@ function process_lead_submission(WP_REST_Request $request) {
                         $subject = "New Lead Assignment: " . $lead_data['leadid'];
                         $body = "<html><body><h3>You've received a new lead as a fallback recipient.</h3>";
                         $body .= "<p>Lead ID: " . esc_html($lead_data['leadid']) . "</p>";
-                        $body .= "<p>Please log in to view the details.</p></body></html>";
+                        if (isset($lead_data['registration']) && isset($lead_data['model'])) {
+                            $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>" ."%n";
+                        }
+                    
+                        // Manually display selected meta data
+                        $meta_keys = [
+                            'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
+                            'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
+                            'vin'
+                        ];
+                    
+                        $body .= "<ul style='list-style-type:none;'>";
+                        foreach ($meta_keys as $key) {
+                            if (!empty($lead_data[$key])) { // Only display if value is not empty
+                                $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>"."%n";
+                            }
+                        }
+                        $body .= "</ul>";
+                    
 
                         $headers = ['Content-Type: text/html; charset=UTF-8'];
 
