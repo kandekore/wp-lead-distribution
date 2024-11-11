@@ -521,4 +521,24 @@ function force_redirect_to_checkout() {
     }
 }
 
+// Ensure notices are displayed on the checkout page
+add_action( 'woocommerce_before_checkout_form', 'woocommerce_output_all_notices', 10 );
+
+// Automatically apply coupon when 'coupon_code' parameter is present in the URL
+add_action( 'woocommerce_add_to_cart', 'apply_coupon_code_from_url', 10, 6 );
+function apply_coupon_code_from_url( $cart_item_key, $product_id, $quantity, $variation_id, $variation, $cart_item_data ) {
+    if ( isset( $_GET['coupon_code'] ) ) {
+        $coupon_code = sanitize_text_field( $_GET['coupon_code'] );
+
+        // Check if the coupon is valid and not already applied
+        if ( ! WC()->cart->has_discount( $coupon_code ) ) {
+            // Apply the coupon
+            WC()->cart->apply_coupon( $coupon_code );
+            wc_clear_notices(); // Clear default WooCommerce notice
+
+            // Optionally add a custom notice
+            wc_add_notice( sprintf( 'Coupon code "%s" has been applied to your order.', esc_html( $coupon_code ) ), 'success' );
+        }
+    }
+}
 
