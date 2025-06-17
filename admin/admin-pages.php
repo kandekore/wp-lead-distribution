@@ -409,9 +409,9 @@ function render_regions_and_users_admin_page() {
             echo "</p>";
         }
     }
-    echo '<pre>';
-    print_r($users_by_region);
-    echo '</pre>';
+    //echo '<pre>';
+    //print_r($users_by_region);
+    //echo '</pre>';
     echo '</div>';
 }
 
@@ -498,10 +498,10 @@ function render_lead_reports_page() {
             $remaining_credits = get_user_meta($user_id, '_user_credits', true);
 
             // Construct the URL for filtering by this user and the selected date
-            $url = admin_url("edit.php?post_type=lead&lead_date_filter={$selected_filter}&assigned_user={$user_id}&filter_action=Filter");
-
+             $url = admin_url("edit.php?post_type=lead&lead_date_filter={$selected_filter}&assigned_user={$user_id}&filter_action=Filter");
+ $edit_user_link = get_edit_user_link($user_id);
             echo "<tr>";
-            echo "<td><a href='" . esc_url($url) . "'>{$user_display_name}</a></td>";
+            echo "<td><a href='" . esc_url($url) . "'>{$user_display_name}</a> -<a href='{$edit_user_link}'> Edit</a> </td>";
             echo "<td>{$lead_count}</td>";
             echo "<td>{$remaining_credits}</td>";
             echo "</tr>";

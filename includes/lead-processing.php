@@ -72,8 +72,8 @@ function process_lead_submission(WP_REST_Request $request) {
             // Manually display selected meta data
             $meta_keys = [
                 'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
-                'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
-                'vin'
+                'cylinder', 'colour', 'doors', 'fuel', 'mot', 'trans', 'mot_due',
+                'vin', 'info'
             ];
 
             $body .= "<ul style='list-style-type:none;'>";
