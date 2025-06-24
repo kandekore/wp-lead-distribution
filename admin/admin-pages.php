@@ -1,7 +1,11 @@
 <?php
 include_once plugin_dir_path(__FILE__) . '../includes/load-postcodes.php';
+
 function register_my_plugin_menu_pages() {
     add_menu_page('Lead Management', 'Lead Management', 'manage_options', 'lead-management-dashboard', 'render_lead_management_dashboard', 'dashicons-admin-site', 6);
+
+    // Register new URL Reports submenu
+    add_submenu_page('lead-management-dashboard', 'Lead URL Reports', 'URL Reports', 'manage_options', 'lead-url-reports', 'render_lead_url_reports_page');
 
     add_submenu_page('lead-management-dashboard', 'Manage Postcode Areas', 'Postcode Areas', 'manage_options', 'manage-postcode-areas', 'render_custom_admin_page');
     add_submenu_page('lead-management-dashboard', 'User Credits Management', 'User Credits', 'manage_options', 'user-credits-management', 'render_user_credits_admin_page');
@@ -18,7 +22,7 @@ add_action('admin_init', 'register_my_custom_plugin_settings');
 function register_my_custom_plugin_settings() {
     register_setting('custom_fallback_settings', 'fallback_settings');
     add_settings_section('fallback_user_section', 'Fallback User Settings', 'fallback_user_section_cb', 'fallback-user-settings');
-    
+
     add_settings_field('fallback_user_enabled', 'Enable Fallback User', 'fallback_user_enabled_cb', 'fallback-user-settings', 'fallback_user_section');
     add_settings_field('fallback_user_email', 'Fallback User Email', 'fallback_user_email_cb', 'fallback-user-settings', 'fallback_user_section');
     add_settings_field('fallback_user_mobile', 'Fallback User Mobile', 'fallback_user_mobile_cb', 'fallback-user-settings', 'fallback_user_section');
@@ -27,7 +31,7 @@ function register_my_custom_plugin_settings() {
 
     register_setting('my-custom-plugin-settings', 'master_admin_settings');
     add_settings_section('master_admin_section', 'Master Admin Settings', 'master_admin_section_cb', 'master-admin-settings');
-    
+
     add_settings_field('master_admin_function_enabled', 'Enable Master Admin Function', 'master_admin_function_enabled_cb', 'master-admin-settings', 'master_admin_section');
     add_settings_field('master_admin_email', 'Master Admin Email', 'master_admin_email_cb', 'master-admin-settings', 'master_admin_section');
     add_settings_field('master_admin_mobile', 'Master Admin Mobile', 'master_admin_mobile_cb', 'master-admin-settings', 'master_admin_section');
@@ -167,7 +171,7 @@ function render_custom_admin_page() {
 echo "<h3>" . esc_html($region) . "</h3>";
 echo "<label><input type='checkbox' class='region-select-all' data-region='" . esc_attr($region) . "'> Select All in " . esc_html($region) . "</label><br>";
 
-        
+
         foreach ($codes as $code) {
             $is_checked = in_array($code, $saved_postcode_areas[$region] ?? [], true) ? 'checked="checked"' : '';
             echo "<label><input type='checkbox' class='region " . esc_attr($region) . "' name='postcode_areas[" . esc_attr($region) . "][]' value='" . esc_attr($code) . "' $is_checked> " . esc_html($code) . "</label><br>";
@@ -206,7 +210,7 @@ function render_user_credits_admin_page() {
         $user_id = intval($_POST['user_id']);
         $current_credits = intval(get_user_meta($user_id, '_user_credits', true));
         $new_credits = $_POST['action'] === 'add' ? $current_credits + 1 : max($current_credits - 1, 0);
-        
+
         update_user_meta($user_id, '_user_credits', $new_credits);
         echo "<div class='notice notice-success'><p>User credits updated successfully.</p></div>";
     }
@@ -232,9 +236,7 @@ function render_user_credits_admin_page() {
     // Table headers
     echo '<table class="wp-list-table widefat fixed striped"><thead><tr><th>User</th><th>Credits</th><th>Lead Reception</th><th>Actions</th></tr></thead><tbody>';
 
-   
 
-   
 
     // Display subscriber users with credits and correct lead reception status
     foreach ($users_with_credits as $user) {
@@ -245,7 +247,7 @@ function render_user_credits_admin_page() {
 
             echo "<tr><td><a href='{$edit_user_link}'>{$user->display_name}</a> ({$user->user_email})</td><td>{$current_credits}</td>";
             echo "<td>{$lead_reception}</td>";
-            
+
             // Action buttons for managing credits for subscribers
             echo '<td>';
             echo '<form method="post" action="" style="display: inline-block;">';
@@ -301,7 +303,7 @@ function render_lead_management_page() {
         'role' => 'author', // Changed to lowercase
         'selected' => isset($_GET['author']) ? $_GET['author'] : 0,
     ]);
-    
+
 
     // Dropdown for filtering by date
     ?>
@@ -333,7 +335,7 @@ function render_lead_management_page() {
 
 function render_regions_and_users_admin_page() {
     echo '<div class="wrap"><h1>Regions and Users</h1>';
-    
+
     // Fetch users with credits (pre-pay) and post-pay users
     $users_with_credits = get_users([
         'meta_key' => '_user_credits',
@@ -355,66 +357,112 @@ function render_regions_and_users_admin_page() {
 
     if (empty($users_by_region)) {
         echo "<p>No users found for the regions.</p>";
-        return;
-    }
+    } else {
+        foreach ($users_by_region as $region => $user_ids) {
+            echo "<h2>" . esc_html($region) . "</h2>";
 
-    foreach ($users_by_region as $region => $user_ids) {
-        echo "<h2>" . esc_html($region) . "</h2>";
+            foreach ($user_ids as $user_id) {
+                $user_info = get_userdata($user_id);
 
-        foreach ($user_ids as $user_id) {
-            $user_info = get_userdata($user_id);
+                // Skip users that are not in pre-pay or post-pay roles
+                if (!$user_info) {
+                    continue;
+                }
 
-            // Skip users that are not in pre-pay or post-pay roles
-            if (!$user_info) {
-                continue;
+                $is_post_pay = in_array('post_pay', $user_info->roles);
+                $is_subscriber = in_array('subscriber', $user_info->roles);
+                $user_credits = get_user_meta($user_id, '_user_credits', true);
+
+                // Determine lead reception status
+                if ($is_post_pay) {
+                    $lead_reception = get_user_meta($user_id, 'enable_lead_reception', true) === '1' ? 'Enabled' : 'Disabled';
+        } elseif ($is_subscriber) {
+            $lead_reception = get_user_meta($user_id, 'disable_lead_reception', true) === '1' ? 'Disabled' : 'Enabled';
+                } else {
+                    $lead_reception = 'N/A';
+                }
+
+                // Retrieve the user's selected postcode areas (assuming stored in user meta)
+                $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
+
+                // Display user info and links
+                $edit_user_link = get_edit_user_link($user_id);
+                echo "<p><strong><a href='" . esc_url($edit_user_link) . "'>" . esc_html($user_info->display_name) . "</a> ({$user_info->user_email})</strong>: ";
+
+                // Show credits for pre-pay users and lead reception for post-pay users
+                if ($is_post_pay) {
+                    echo "Lead Reception: {$lead_reception}";
+                } elseif ($is_subscriber) {
+                    echo "Lead Reception: {$lead_reception} (Credits: {$user_credits})";
+                } else {
+                    echo "Credits: {$user_credits}";
+                }
+
+                // Display the user's assigned postcodes for the region
+                echo "; Postcodes: ";
+                if (!empty($selected_postcode_areas[$region])) {
+                    echo implode(', ', $selected_postcode_areas[$region]);
+                } else {
+                    echo "None";
+                }
+
+                echo "</p>";
             }
-
-            $is_post_pay = in_array('post_pay', $user_info->roles);
-            $is_subscriber = in_array('subscriber', $user_info->roles);
-            $user_credits = get_user_meta($user_id, '_user_credits', true);
-
-            // Determine lead reception status
-            if ($is_post_pay) {
-                $lead_reception = get_user_meta($user_id, 'enable_lead_reception', true) === '1' ? 'Enabled' : 'Disabled';
-            } elseif ($is_subscriber) {
-                $lead_reception = get_user_meta($user_id, 'disable_lead_reception', true) === '1' ? 'Disabled' : 'Enabled';
-            } else {
-                $lead_reception = 'N/A';
-            }
-
-            // Retrieve the user's selected postcode areas (assuming stored in user meta)
-            $selected_postcode_areas = json_decode(get_user_meta($user_id, 'selected_postcode_areas', true), true);
-
-            // Display user info and links
-            $edit_user_link = get_edit_user_link($user_id);
-            echo "<p><strong><a href='" . esc_url($edit_user_link) . "'>" . esc_html($user_info->display_name) . "</a> ({$user_info->user_email})</strong>: ";
-
-            // Show credits for pre-pay users and lead reception for post-pay users
-            if ($is_post_pay) {
-                echo "Lead Reception: {$lead_reception}";
-            } elseif ($is_subscriber) {
-                echo "Lead Reception: {$lead_reception} (Credits: {$user_credits})";
-            } else {
-                echo "Credits: {$user_credits}";
-            }
-
-            // Display the user's assigned postcodes for the region
-            echo "; Postcodes: ";
-            if (!empty($selected_postcode_areas[$region])) {
-                echo implode(', ', $selected_postcode_areas[$region]);
-            } else {
-                echo "None";
-            }
-
-            echo "</p>";
         }
     }
-    //echo '<pre>';
-    //print_r($users_by_region);
-    //echo '</pre>';
+
+    // Section for unassigned postcodes
+    echo '<h2>Unassigned Postcode Areas (Go to Fallback User)</h2>';
+
+    $all_postcode_areas_json = load_postcode_areas_from_json(); // Full list from postcodes.json
+
+    // Flatten all available postcodes from JSON
+    $all_json_codes_flat = [];
+    foreach ($all_postcode_areas_json as $region => $codes) {
+        foreach ($codes as $code) {
+            $all_json_codes_flat[] = $code;
+        }
+    }
+    $all_json_codes_flat = array_unique($all_json_codes_flat);
+
+    // Flatten all postcodes assigned to any user
+    $all_user_selected_codes_flat = [];
+    $users = get_users(); // Get all users
+    foreach ($users as $user) {
+        $user_selected_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
+        if (is_array($user_selected_areas)) {
+            foreach ($user_selected_areas as $region => $codes) {
+                if (is_array($codes)) {
+                    $all_user_selected_codes_flat = array_merge($all_user_selected_codes_flat, $codes);
+                }
+            }
+        }
+    }
+    $all_user_selected_codes_flat = array_unique($all_user_selected_codes_flat);
+
+    // Find postcodes that are in JSON but not assigned to any user
+    $unassigned_codes = array_diff($all_json_codes_flat, $all_user_selected_codes_flat);
+
+    if (empty($unassigned_codes)) {
+        echo '<p>All available postcode areas are currently assigned to at least one user.</p>';
+    } else {
+        // Re-group unassigned codes by their original region for display
+        $unassigned_codes_by_region = [];
+        foreach ($all_postcode_areas_json as $region => $codes_in_region) {
+            $unassigned_in_region = array_intersect($codes_in_region, $unassigned_codes);
+            if (!empty($unassigned_in_region)) {
+                $unassigned_codes_by_region[$region] = $unassigned_in_region;
+            }
+        }
+
+        foreach ($unassigned_codes_by_region as $region => $codes) {
+            echo "<h3>" . esc_html($region) . "</h3>";
+            echo "<p>" . esc_html(implode(', ', $codes)) . "</p>";
+        }
+    }
+
     echo '</div>';
 }
-
 
 
 function render_lead_reports_page() {
@@ -435,6 +483,7 @@ function render_lead_reports_page() {
     // Dropdown for filtering by date
     $selected_filter = isset($_GET['lead_date_filter']) ? $_GET['lead_date_filter'] : 'today';
     ?>
+    <label for="lead_date_filter">Filter by date: </label>
     <select name="lead_date_filter">
         <option value="today" <?php selected($selected_filter, 'today'); ?>>Today</option>
         <option value="yesterday" <?php selected($selected_filter, 'yesterday'); ?>>Yesterday</option>
@@ -745,3 +794,308 @@ function register_lead_report_menu_page() {
     );
 }
 add_action('admin_menu', 'register_lead_report_menu_page');
+
+
+/**
+ * New URL Reports Page Functions
+ */
+
+// Main rendering function for the URL Reports page
+function render_lead_url_reports_page() {
+    $current_tab = isset($_GET['tab']) ? $_GET['tab'] : 'url_ranking'; // Default tab
+
+    // Handle form submissions for campaign strings
+    if (isset($_POST['campaign_action']) && current_user_can('manage_options')) {
+        if ($_POST['campaign_action'] == 'add_campaign' && check_admin_referer('add_campaign_string_nonce', 'add_campaign_nonce')) {
+            $string = isset($_POST['campaign_string']) ? sanitize_text_field($_POST['campaign_string']) : '';
+            $name = isset($_POST['campaign_name']) ? sanitize_text_field($_POST['campaign_name']) : '';
+            if (!empty($string) && !empty($name)) {
+                add_update_lead_campaign_string($string, $name);
+                echo '<div class="notice notice-success is-dismissible"><p>Campaign string added/updated successfully!</p></div>';
+            } else {
+                echo '<div class="notice notice-error is-dismissible"><p>Campaign string and name cannot be empty.</p></div>';
+            }
+        } elseif ($_POST['campaign_action'] == 'delete_campaign' && check_admin_referer('delete_campaign_string_nonce', 'delete_campaign_nonce')) {
+            $string_to_delete = isset($_POST['string_to_delete']) ? sanitize_text_field($_POST['string_to_delete']) : '';
+            if (!empty($string_to_delete)) {
+                delete_lead_campaign_string($string_to_delete);
+                echo '<div class="notice notice-success is-dismissible"><p>Campaign string deleted successfully!</p></div>';
+            }
+        }
+    }
+
+
+    echo '<div class="wrap">';
+    echo '<h1>Lead URL Reports</h1>';
+
+    // Tab navigation
+    echo '<h2 class="nav-tab-wrapper">';
+    echo '<a href="' . esc_url(add_query_arg('tab', 'url_ranking', menu_page_url('lead-url-reports', false))) . '" class="nav-tab ' . ($current_tab == 'url_ranking' ? 'nav-tab-active' : '') . '">URL Rankings</a>';
+    echo '<a href="' . esc_url(add_query_arg('tab', 'source_ranking', menu_page_url('lead-url-reports', false))) . '" class="nav-tab ' . ($current_tab == 'source_ranking' ? 'nav-tab-active' : '') . '">Source URL Rankings</a>';
+    echo '<a href="' . esc_url(add_query_arg('tab', 'campaign_search', menu_page_url('lead-url-reports', false))) . '" class="nav-tab ' . ($current_tab == 'campaign_search' ? 'nav-tab-active' : '') . '">Campaign URL Search</a>';
+    echo '</h2>';
+
+    // Tab content
+    echo '<div class="tab-content">';
+    switch ($current_tab) {
+        case 'url_ranking':
+            render_url_ranking_tab();
+            break;
+        case 'source_ranking':
+            render_source_ranking_tab();
+            break;
+        case 'campaign_search':
+            render_campaign_search_tab();
+            break;
+    }
+    echo '</div>'; // .tab-content
+    echo '</div>'; // .wrap
+}
+
+// Helper function to get date filter options HTML
+function get_date_filter_options_html($selected_filter) {
+    $options = [
+        'today' => 'Today',
+        'yesterday' => 'Yesterday',
+        'this_week' => 'This Week',
+        'last_week' => 'Last Week',
+        'this_month' => 'This Month',
+        'last_month' => 'Last Month',
+    ];
+    $html = '';
+    foreach ($options as $value => $label) {
+        $html .= '<option value="' . esc_attr($value) . '" ' . selected($selected_filter, $value, false) . '>' . esc_html($label) . '</option>';
+    }
+    return $html;
+}
+
+// Tab 1: URL Rankings
+function render_url_ranking_tab() {
+    $selected_filter = isset($_GET['date_filter']) ? sanitize_text_field($_GET['date_filter']) : 'this_month'; // Default filter
+
+    echo '<h3>Lead URL Rankings</h3>';
+
+    // Time filter form
+    echo '<form method="get" class="lead-reports-filter-form">';
+    echo '<input type="hidden" name="page" value="lead-url-reports">';
+    echo '<input type="hidden" name="tab" value="url_ranking">';
+    echo '<label for="date_filter">Filter by date: </label>';
+    echo '<select name="date_filter" id="date_filter">';
+    echo get_date_filter_options_html($selected_filter);
+    echo '</select>';
+    submit_button('Filter', 'primary', 'filter_action', false);
+    echo '</form>';
+
+    $date_query = get_lead_date_query($selected_filter);
+
+    $args = [
+        'post_type'      => 'lead',
+        'posts_per_page' => -1, // Get all leads for the period
+        'date_query'     => [$date_query],
+        'meta_query'     => [
+            [
+                'key'     => 'submission_url',
+                'compare' => 'EXISTS', // Only consider leads with a URL
+            ],
+        ],
+        'fields'         => 'ids', // Get only IDs for performance
+    ];
+
+    $leads_query = new WP_Query($args);
+    $url_counts = [];
+
+    if ($leads_query->have_posts()) {
+        foreach ($leads_query->posts as $lead_id) {
+            $url = get_post_meta($lead_id, 'submission_url', true);
+            if (!empty($url)) {
+                $url_counts[$url] = isset($url_counts[$url]) ? $url_counts[$url] + 1 : 1;
+            }
+        }
+    }
+    wp_reset_postdata();
+
+    // Sort by count descending
+    arsort($url_counts);
+
+    if (!empty($url_counts)) {
+        echo '<table class="wp-list-table widefat fixed striped">';
+        echo '<thead><tr><th>URL</th><th>Lead Count</th></tr></thead><tbody>';
+        foreach ($url_counts as $url => $count) {
+            echo '<tr><td><a href="' . esc_url($url) . '" target="_blank">' . esc_html($url) . '</a></td><td>' . esc_html($count) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+    } else {
+        echo '<p>No leads found for the selected period.</p>';
+    }
+}
+
+// Tab 2: Source URL Rankings
+function render_source_ranking_tab() {
+    $selected_filter = isset($_GET['date_filter']) ? sanitize_text_field($_GET['date_filter']) : 'this_month'; // Default filter
+
+    echo '<h3>Lead Source URL Rankings</h3>';
+
+    // Time filter form
+    echo '<form method="get" class="lead-reports-filter-form">';
+    echo '<input type="hidden" name="page" value="lead-url-reports">';
+    echo '<input type="hidden" name="tab" value="source_ranking">';
+    echo '<label for="date_filter">Filter by date: </label>';
+    echo '<select name="date_filter" id="date_filter">';
+    echo get_date_filter_options_html($selected_filter);
+    echo '</select>';
+    submit_button('Filter', 'primary', 'filter_action', false);
+    echo '</form>';
+
+    $date_query = get_lead_date_query($selected_filter);
+
+    $args = [
+        'post_type'      => 'lead',
+        'posts_per_page' => -1, // Get all leads for the period
+        'date_query'     => [$date_query],
+        'meta_query'     => [
+            [
+                'key'     => 'source_domain',
+                'compare' => 'EXISTS', // Only consider leads with a source domain
+            ],
+        ],
+        'fields'         => 'ids', // Get only IDs for performance
+    ];
+
+    $leads_query = new WP_Query($args);
+    $source_counts = [];
+
+    if ($leads_query->have_posts()) {
+        foreach ($leads_query->posts as $lead_id) {
+            $source = get_post_meta($lead_id, 'source_domain', true);
+            if (!empty($source)) {
+                $source_counts[$source] = isset($source_counts[$source]) ? $source_counts[$source] + 1 : 1;
+            }
+        }
+    }
+    wp_reset_postdata();
+
+    // Sort by count descending
+    arsort($source_counts);
+
+    if (!empty($source_counts)) {
+        echo '<table class="wp-list-table widefat fixed striped">';
+        echo '<thead><tr><th>Source URL</th><th>Lead Count</th></tr></thead><tbody>';
+        foreach ($source_counts as $source => $count) {
+            echo '<tr><td><a href="' . esc_url($source) . '" target="_blank">' . esc_html($source) . '</a></td><td>' . esc_html($count) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+    } else {
+        echo '<p>No leads found for the selected period.</p>';
+    }
+}
+
+// Functions to manage campaign strings (stored in wp_options)
+function get_lead_campaign_strings() {
+    $strings = get_option('lead_campaign_strings', []);
+    return is_array($strings) ? $strings : []; // Ensure it's an array
+}
+
+function add_update_lead_campaign_string($string, $name) {
+    $strings = get_lead_campaign_strings();
+    $strings[sanitize_text_field($string)] = sanitize_text_field($name);
+    update_option('lead_campaign_strings', $strings);
+}
+
+function delete_lead_campaign_string($string) {
+    $strings = get_lead_campaign_strings();
+    if (isset($strings[sanitize_text_field($string)])) {
+        unset($strings[sanitize_text_field($string)]);
+        update_option('lead_campaign_strings', $strings);
+    }
+}
+
+// Tab 3: Campaign URL Search
+function render_campaign_search_tab() {
+    $selected_filter = isset($_GET['date_filter']) ? sanitize_text_field($_GET['date_filter']) : 'this_month'; // Default filter
+
+    echo '<h3>Campaign URL Search</h3>';
+
+    // Form to add/update campaign strings
+    echo '<h4>Manage Campaign Search Strings</h4>';
+    echo '<form method="post" action="' . esc_url(admin_url('admin.php?page=lead-url-reports&tab=campaign_search')) . '">';
+    wp_nonce_field('add_campaign_string_nonce', 'add_campaign_nonce');
+    echo '<input type="hidden" name="campaign_action" value="add_campaign">';
+    echo '<label for="campaign_string">URL Contains String:</label> ';
+    echo '<input type="text" id="campaign_string" name="campaign_string" required>';
+    echo '<label for="campaign_name"> Campaign Name:</label> ';
+    echo '<input type="text" id="campaign_name" name="campaign_name" required>';
+    submit_button('Add/Update Campaign', 'secondary', 'submit_add_campaign', false);
+    echo '</form>';
+
+    // Display existing campaign strings
+    $campaign_strings = get_lead_campaign_strings();
+    if (!empty($campaign_strings)) {
+        echo '<h4>Defined Campaigns:</h4>';
+        echo '<table class="wp-list-table widefat fixed striped">';
+        echo '<thead><tr><th>Campaign Name</th><th>URL Contains String</th><th>Action</th></tr></thead><tbody>';
+        foreach ($campaign_strings as $string => $name) {
+            echo '<tr>';
+            echo '<td>' . esc_html($name) . '</td>';
+            echo '<td><code>' . esc_html($string) . '</code></td>';
+            echo '<td>';
+            echo '<form method="post" action="' . esc_url(admin_url('admin.php?page=lead-url-reports&tab=campaign_search')) . '" style="display:inline-block;">';
+            wp_nonce_field('delete_campaign_string_nonce', 'delete_campaign_nonce');
+            echo '<input type="hidden" name="campaign_action" value="delete_campaign">';
+            echo '<input type="hidden" name="string_to_delete" value="' . esc_attr($string) . '">';
+            submit_button('Delete', 'delete', 'submit_delete_campaign', false);
+            echo '</form>';
+            echo '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    } else {
+        echo '<p>No campaign search strings defined yet.</p>';
+    }
+
+    // Time filter for the report
+    echo '<h4>Campaign Report:</h4>';
+    echo '<form method="get" class="lead-reports-filter-form">';
+    echo '<input type="hidden" name="page" value="lead-url-reports">';
+    echo '<input type="hidden" name="tab" value="campaign_search">';
+    echo '<label for="date_filter">Filter by date: </label>';
+    echo '<select name="date_filter" id="date_filter">';
+    echo get_date_filter_options_html($selected_filter);
+    echo '</select>';
+    submit_button('Filter', 'primary', 'filter_action', false);
+    echo '</form>';
+
+    $date_query = get_lead_date_query($selected_filter);
+    $report_data = [];
+
+    if (!empty($campaign_strings)) {
+        foreach ($campaign_strings as $string => $name) {
+            $args = [
+                'post_type'      => 'lead',
+                'posts_per_page' => -1,
+                'date_query'     => [$date_query],
+                'meta_query'     => [
+                    [
+                        'key'     => 'submission_url',
+                        'value'   => '%' . $string . '%',
+                        'compare' => 'LIKE',
+                    ],
+                ],
+                'fields'         => 'ids',
+            ];
+            $leads_query = new WP_Query($args);
+            $report_data[$name] = $leads_query->found_posts;
+            wp_reset_postdata(); // Reset post data after each query
+        }
+
+        echo '<table class="wp-list-table widefat fixed striped">';
+        echo '<thead><tr><th>Campaign Name</th><th>URL Contains String</th><th>Lead Count</th></tr></thead><tbody>';
+        foreach ($report_data as $name => $count) {
+            // Find the original string for this name
+            $string_for_name = array_search($name, $campaign_strings);
+            echo '<tr><td>' . esc_html($name) . '</td><td><code>' . esc_html($string_for_name) . '</code></td><td>' . esc_html($count) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+    } else {
+        echo '<p>Define campaign search strings above to see the report.</p>';
+    }
+}

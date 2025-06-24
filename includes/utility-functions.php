@@ -46,6 +46,9 @@ function store_lead($lead_data, $user_id) {
             'leadid' => $lead_data['leadid'],
             'vin' => $lead_data['vin'],
             'resend' => $lead_data['resend'],
+             'submission_url' => $lead_data['submission_url'],
+            'source_domain' => $lead_data['source_domain'],
+            'ip_address' => $lead_data['ip_address'],
         ],
     ];
 
@@ -87,6 +90,11 @@ function custom_lead_filters($post_type, $which) {
         'selected' => isset($_GET['assigned_user']) ? $_GET['assigned_user'] : '',
     ]);
 
+    // Add postcode search input
+    ?>
+    <input type="text" name="lead_postcode_search" placeholder="<?php _e('Search Postcode prefix...'); ?>" value="<?php echo isset($_GET['lead_postcode_search']) ? esc_attr($_GET['lead_postcode_search']) : ''; ?>">
+    <?php
+
     // Submit button for the filters
     submit_button(__('Filter'), null, 'filter_action', false);
 }
@@ -110,6 +118,32 @@ function filter_leads_by_custom_filters($query) {
                     'compare' => '='
                 ]
             ]);
+        }
+           // Handle sorting by postcode
+        if (isset($query->query_vars['orderby']) && 'postcode' === $query->query_vars['orderby']) {
+            $query->set('meta_key', 'postcode');
+            $query->set('orderby', 'meta_value');
+        }
+
+        // Handle postcode search
+        if (!empty($_GET['lead_postcode_search'])) {
+            $search_term = sanitize_text_field($_GET['lead_postcode_search']);
+            $meta_query = $query->get('meta_query'); // Get existing meta_query if any
+            if (empty($meta_query)) {
+                $meta_query = [];
+            }
+            $meta_query[] = [
+                'key' => 'postcode',
+                'value' => $search_term . '%', // Search for postcodes starting with the term
+                'compare' => 'LIKE',
+            ];
+            $query->set('meta_query', $meta_query);
+        }
+
+        // Handle sorting by postcode
+        if (isset($query->query_vars['orderby']) && 'postcode' === $query->query_vars['orderby']) {
+            $query->set('meta_key', 'postcode');
+            $query->set('orderby', 'meta_value');
         }
     }
 }
@@ -192,6 +226,7 @@ function add_custom_lead_columns($columns) {
     // Add new columns
     $columns['leadid'] = __('Lead ID');
     $columns['postcode'] = __('Postcode');
+    $columns['vin'] = __('VIN'); // Add VIN column
     $columns['post_author'] = __('Agent');
 
     return $columns;
@@ -205,6 +240,9 @@ function custom_lead_column_content($column_name, $post_id) {
             break;
         case 'postcode':
             echo get_post_meta($post_id, 'postcode', true);
+            break;
+        case 'vin': // Handle VIN column
+            echo get_post_meta($post_id, 'vin', true);
             break;
         case 'post_author':
             $author_id = get_post_field('post_author', $post_id);
@@ -542,3 +580,8 @@ function apply_coupon_code_from_url( $cart_item_key, $product_id, $quantity, $va
     }
 }
 
+add_filter('manage_edit_lead_sortable_columns', 'make_postcode_column_sortable');
+function make_postcode_column_sortable($columns) {
+    $columns['postcode'] = 'postcode'; // 'postcode' is the meta_key for sorting
+    return $columns;
+}

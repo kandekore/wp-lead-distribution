@@ -23,8 +23,21 @@ function process_lead_submission(WP_REST_Request $request) {
         'leadid' => sanitize_text_field($request->get_param('leadid')),
         'resend' => sanitize_text_field($request->get_param('resend')),
         'vin' => sanitize_text_field($request->get_param('vin')),
+        // Add new fields for URL, IP, and Source
+        'submission_url' => isset($_SERVER['HTTP_REFERER']) ? esc_url_raw($_SERVER['HTTP_REFERER']) : '',
+        'ip_address' => isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field($_SERVER['REMOTE_ADDR']) : '',
     ];
 
+      // Calculate source domain from submission_url
+    $submission_url = $lead_data['submission_url'];
+    $source_domain = '';
+    if (!empty($submission_url)) {
+        $parsed_url = parse_url($submission_url);
+        if (isset($parsed_url['scheme']) && isset($parsed_url['host'])) {
+            $source_domain = $parsed_url['scheme'] . '://' . $parsed_url['host'] . '/';
+        }
+    }
+    $lead_data['source_domain'] = $source_domain; // Add to lead_data
     $postcode_prefix = substr($lead_data['postcode'], 0, 2);
     $eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix, $lead_data['vin']);
 
