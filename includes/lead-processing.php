@@ -3,7 +3,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;    
 
 function process_lead_submission(WP_REST_Request $request) {
-    // Extract relevant data from the request
+    // Extract common data from the request parameters
     $lead_data = [
         'postcode' => strtoupper(sanitize_text_field($request->get_param('postcode'))),
         'registration' => strtoupper(sanitize_text_field($request->get_param('vrg'))),
@@ -23,13 +23,28 @@ function process_lead_submission(WP_REST_Request $request) {
         'leadid' => sanitize_text_field($request->get_param('leadid')),
         'resend' => sanitize_text_field($request->get_param('resend')),
         'vin' => sanitize_text_field($request->get_param('vin')),
-        // Add new fields for URL, IP, and Source
-        'submission_url' => isset($_SERVER['HTTP_REFERER']) ? esc_url_raw($_SERVER['HTTP_REFERER']) : '',
-        'ip_address' => isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field($_SERVER['REMOTE_ADDR']) : '',
     ];
 
-      // Calculate source domain from submission_url
-    $submission_url = $lead_data['submission_url'];
+    // Get submission_url and ip_address directly from request parameters
+    $submission_url = sanitize_url($request->get_param('submission_url'));
+    $ip_address = sanitize_text_field($request->get_param('ip_address'));
+
+    // NEW: Get tracking parameters directly from request parameters
+    $vt_campaign = sanitize_text_field($request->get_param('vt_campaign'));
+    $utm_source  = sanitize_text_field($request->get_param('utm_source'));
+    $vt_keyword  = sanitize_text_field($request->get_param('vt_keyword'));
+    $vt_adgroup  = sanitize_text_field($request->get_param('vt_adgroup'));
+
+    // Assign all collected and extracted data to lead_data
+    $lead_data['submission_url'] = $submission_url;
+    $lead_data['ip_address'] = $ip_address;
+    $lead_data['vt_campaign'] = $vt_campaign;   // Store directly
+    $lead_data['utm_source'] = $utm_source;     // Store directly
+    $lead_data['vt_keyword'] = $vt_keyword;     // Store directly
+    $lead_data['vt_adgroup'] = $vt_adgroup;     // Store directly
+    $lead_data['campaign_id'] = $vt_campaign;   // campaign_id now maps directly to vt_campaign
+
+    // Calculate source domain (logic remains the same, uses the processed submission_url)
     $source_domain = '';
     if (!empty($submission_url)) {
         $parsed_url = parse_url($submission_url);
@@ -37,7 +52,7 @@ function process_lead_submission(WP_REST_Request $request) {
             $source_domain = $parsed_url['scheme'] . '://' . $parsed_url['host'] . '/';
         }
     }
-    $lead_data['source_domain'] = $source_domain; // Add to lead_data
+    $lead_data['source_domain'] = $source_domain;
     $postcode_prefix = substr($lead_data['postcode'], 0, 2);
     $eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix, $lead_data['vin']);
 

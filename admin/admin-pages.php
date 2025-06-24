@@ -1009,18 +1009,17 @@ function delete_lead_campaign_string($string) {
     }
 }
 
-// Tab 3: Campaign URL Search
 function render_campaign_search_tab() {
     $selected_filter = isset($_GET['date_filter']) ? sanitize_text_field($_GET['date_filter']) : 'this_month'; // Default filter
 
-    echo '<h3>Campaign URL Search</h3>';
+    echo '<h3>Campaign ID Report</h3>'; // Updated tab heading
 
     // Form to add/update campaign strings
-    echo '<h4>Manage Campaign Search Strings</h4>';
+    echo '<h4>Manage Campaign IDs</h4>'; // Updated section heading
     echo '<form method="post" action="' . esc_url(admin_url('admin.php?page=lead-url-reports&tab=campaign_search')) . '">';
     wp_nonce_field('add_campaign_string_nonce', 'add_campaign_nonce');
     echo '<input type="hidden" name="campaign_action" value="add_campaign">';
-    echo '<label for="campaign_string">URL Contains String:</label> ';
+    echo '<label for="campaign_string">Campaign ID:</label> '; // Updated label to expect ID
     echo '<input type="text" id="campaign_string" name="campaign_string" required>';
     echo '<label for="campaign_name"> Campaign Name:</label> ';
     echo '<input type="text" id="campaign_name" name="campaign_name" required>';
@@ -1032,11 +1031,11 @@ function render_campaign_search_tab() {
     if (!empty($campaign_strings)) {
         echo '<h4>Defined Campaigns:</h4>';
         echo '<table class="wp-list-table widefat fixed striped">';
-        echo '<thead><tr><th>Campaign Name</th><th>URL Contains String</th><th>Action</th></tr></thead><tbody>';
+        echo '<thead><tr><th>Campaign Name</th><th>Campaign ID</th><th>Action</th></tr></thead><tbody>'; // Updated table header
         foreach ($campaign_strings as $string => $name) {
             echo '<tr>';
             echo '<td>' . esc_html($name) . '</td>';
-            echo '<td><code>' . esc_html($string) . '</code></td>';
+            echo '<td><code>' . esc_html($string) . '</code></td>'; // This is now the Campaign ID
             echo '<td>';
             echo '<form method="post" action="' . esc_url(admin_url('admin.php?page=lead-url-reports&tab=campaign_search')) . '" style="display:inline-block;">';
             wp_nonce_field('delete_campaign_string_nonce', 'delete_campaign_nonce');
@@ -1049,7 +1048,7 @@ function render_campaign_search_tab() {
         }
         echo '</tbody></table>';
     } else {
-        echo '<p>No campaign search strings defined yet.</p>';
+        echo '<p>No campaign IDs defined yet.</p>'; // Updated message
     }
 
     // Time filter for the report
@@ -1075,27 +1074,26 @@ function render_campaign_search_tab() {
                 'date_query'     => [$date_query],
                 'meta_query'     => [
                     [
-                        'key'     => 'submission_url',
-                        'value'   => '%' . $string . '%',
-                        'compare' => 'LIKE',
+                        'key'     => 'campaign_id', // Target the new campaign_id meta field
+                        'value'   => $string,       // Direct match with the campaign ID
+                        'compare' => '=',
                     ],
                 ],
                 'fields'         => 'ids',
             ];
             $leads_query = new WP_Query($args);
             $report_data[$name] = $leads_query->found_posts;
-            wp_reset_postdata(); // Reset post data after each query
+            wp_reset_postdata();
         }
 
         echo '<table class="wp-list-table widefat fixed striped">';
-        echo '<thead><tr><th>Campaign Name</th><th>URL Contains String</th><th>Lead Count</th></tr></thead><tbody>';
+        echo '<thead><tr><th>Campaign Name</th><th>Campaign ID</th><th>Lead Count</th></tr></thead><tbody>'; // Updated table header
         foreach ($report_data as $name => $count) {
-            // Find the original string for this name
-            $string_for_name = array_search($name, $campaign_strings);
+            $string_for_name = array_search($name, $campaign_strings); // Retrieve the ID string for display
             echo '<tr><td>' . esc_html($name) . '</td><td><code>' . esc_html($string_for_name) . '</code></td><td>' . esc_html($count) . '</td></tr>';
         }
         echo '</tbody></table>';
     } else {
-        echo '<p>Define campaign search strings above to see the report.</p>';
+        echo '<p>Define campaign IDs above to see the report.</p>'; // Updated message
     }
 }

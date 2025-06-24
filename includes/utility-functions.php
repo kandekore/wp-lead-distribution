@@ -18,16 +18,15 @@ function register_lead_post_type() {
 
 
 function store_lead($lead_data, $user_id) {
-
     $user_info = get_userdata($user_id);
     $user_display_name = $user_info ? $user_info->display_name : 'Unknown User';
     // Prepare post data
     $post_data = [
-        'post_title'    => wp_strip_all_tags($lead_data['registration'] . ' -  ' . $lead_data['model'] ), // Use the car's registration as the post title for easy identification
-        'post_content'  => wp_json_encode($lead_data), // Store all lead data as JSON in the post content
+        'post_title'    => wp_strip_all_tags($lead_data['registration'] . ' -  ' . $lead_data['model'] ),
+        'post_content'  => wp_json_encode($lead_data),
         'post_status'   => 'publish',
         'post_type'     => 'lead',
-        'post_author'   => $user_id, // Assign lead to this user
+        'post_author'   => $user_id,
         'meta_input' => [
             'postcode' => $lead_data['postcode'],
             'registration' => $lead_data['registration'],
@@ -42,26 +41,27 @@ function store_lead($lead_data, $user_id) {
             'mot' => $lead_data['mot'],
             'transmission' => $lead_data['trans'],
             'doors' => $lead_data['doors'],
-            'mot_due' => $lead_data['mot_due'], 
+            'mot_due' => $lead_data['mot_due'],
             'leadid' => $lead_data['leadid'],
             'vin' => $lead_data['vin'],
             'resend' => $lead_data['resend'],
-             'submission_url' => $lead_data['submission_url'],
+            'submission_url' => $lead_data['submission_url'],
             'source_domain' => $lead_data['source_domain'],
             'ip_address' => $lead_data['ip_address'],
+            'campaign_id' => $lead_data['campaign_id'], // Campaign ID (from vt_campaign)
+            'vt_campaign' => $lead_data['vt_campaign'],   // Store vt_campaign directly
+            'utm_source'  => $lead_data['utm_source'],    // Store utm_source directly
+            'vt_keyword'  => $lead_data['vt_keyword'],    // Store vt_keyword directly
+            'vt_adgroup'  => $lead_data['vt_adgroup'],    // Store vt_adgroup directly
         ],
     ];
 
-    // Insert the post into the database
     $post_id = wp_insert_post($post_data);
     return $post_id;
 
-    // Check for errors
     if (is_wp_error($post_id)) {
         error_log('Failed to store lead: ' . $post_id->get_error_message());
-     
     }
-  
 }
 
 add_action('restrict_manage_posts', 'custom_lead_filters', 10, 2);
