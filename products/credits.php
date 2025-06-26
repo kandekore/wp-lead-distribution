@@ -220,29 +220,50 @@ add_action('woocommerce_subscription_status_updated', 'notify_subscription_statu
 
 function notify_subscription_status_change($subscription, $old_status, $new_status) {
     $user_id = $subscription->get_user_id();
-    
-    // Check if renewal was triggered by credit depletion and avoid sending "Subscription Renewed" email
-    $renewal_order_id = $subscription->get_meta('_subscription_renewal_order_id'); // Retrieve the renewal order ID if available
-if (!$renewal_order_id) {
-    // Get orders associated with the subscription if `get_last_order_id` is not available
-    $orders = $subscription->get_related_orders(['limit' => 1, 'order' => 'DESC']);
-    $renewal_order_id = !empty($orders) ? reset($orders) : null;
-}
+    $triggered_by_credits_renewal_attempt = false; // Flag to indicate if this status change is part of a credit-triggered renewal attempt
 
-$renewal_order = $renewal_order_id ? wc_get_order($renewal_order_id) : null;
-$triggered_by_credits_renewal = $renewal_order ? $renewal_order->get_meta('_triggered_by_credits_renewal') : false;
+    // Get all orders associated with this subscription to check for the _triggered_by_credits_renewal flag
+    $all_related_orders = $subscription->get_related_orders();
 
-    $triggered_by_credits_renewal = $renewal_order ? $renewal_order->get_meta('_triggered_by_credits_renewal') : false;
+    foreach ($all_related_orders as $order_id) {
+        $order = wc_get_order($order_id);
+        // Check if any related order has the credit-triggered renewal flag
+        // This flag is set on the ORDER by check_credits_and_renew_subscription
+        if ($order && $order->get_meta('_triggered_by_credits_renewal') === true) {
+            $triggered_by_credits_renewal_attempt = true;
+            break; // Found the flag, no need to check further orders
+        }
+    }
 
-    if ($new_status == 'active' && !$triggered_by_credits_renewal) {
+    // --- Scenario A: Credits drop to 0 (or below threshold) AND auto-renewal succeeds. ---
+    // Goal: Send "Subscription Renewed" email.
+    // This condition will now send the "Subscription Renewed" email for any activation,
+    // as long as it wasn't previously cancelled or failed.
+    if ($new_status == 'active' && $old_status !== 'cancelled' && $old_status !== 'failed') {
         send_credit_notification($user_id, 'Subscription Renewed', 'Dear user, your subscription has been renewed.');
         notify_admin('Subscription Renewed', 'User ID ' . $user_id . ' had their subscription renewed.');
-    } elseif ($new_status == 'cancelled' && $old_status !== 'active') {
-        send_credit_notification($user_id, 'Subscription Cancelled', 'Dear user, your subscription has been cancelled.');
-        notify_admin('Subscription Cancelled', 'User ID ' . $user_id . ' had their subscription cancelled.');
-    } elseif ($new_status == 'failed') {
+    }
+    // --- Scenario B: Credits drop to 0 (only when credits drop to zero and subscription is cancelled) AND auto-renewal fails. ---
+    // Goal: ONLY "Credits Depleted" email. This means suppressing "Subscription Renewal Failed" from here.
+    // "Credits Depleted" email is already handled by deduct_credit_from_user when renewal fails.
+
+    // Suppress "Subscription Renewal Failed" if it was a credit-triggered attempt that resulted in 'failed' status
+    // Because the "Credits Depleted" email is the primary notification for this specific failure.
+    elseif ($new_status == 'failed' && $triggered_by_credits_renewal_attempt === true) {
+        // Do NOT send "Subscription Renewal Failed" because "Credits Depleted" is preferred here.
+        // The "Credits Depleted" email is handled by deduct_credit_from_user -> send_credit_depletion_email.
+        error_log("Suppressed 'Subscription Renewal Failed' email for user {$user_id} due to credit-triggered failure, 'Credits Depleted' email is primary.");
+    }
+    // Send "Subscription Renewal Failed" for non-credit-triggered failures (if any other plugin/process fails a subscription payment)
+    // Or if the subscription fails for reasons other than credit depletion.
+    elseif ($new_status == 'failed' && $triggered_by_credits_renewal_attempt === false) {
         send_credit_notification($user_id, 'Subscription Renewal Failed', 'Dear user, your subscription renewal payment has failed. Please update your payment method.');
         notify_admin('Subscription Renewal Failed', 'User ID ' . $user_id . ' had a renewal payment failure.');
+    }
+    // Handle general cancellation (not specifically tied to zero credits + failed renewal, which is handled by "Credits Depleted")
+    elseif ($new_status == 'cancelled' && $old_status !== 'active') {
+        send_credit_notification($user_id, 'Subscription Cancelled', 'Dear user, your subscription has been cancelled.');
+        notify_admin('Subscription Cancelled', 'User ID ' . $user_id . ' had their subscription cancelled.');
     }
 }
 

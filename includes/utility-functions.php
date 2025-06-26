@@ -103,49 +103,121 @@ add_action('pre_get_posts', 'filter_leads_by_custom_filters');
 function filter_leads_by_custom_filters($query) {
     global $pagenow;
 
+    // Ensure we are on the correct admin page for 'lead' post type and main query
     if (is_admin() && 'edit.php' === $pagenow && 'lead' === $query->query['post_type'] && $query->is_main_query()) {
-        // Handle the date filter
-        if (!empty($_GET['lead_date_filter'])) {
-            apply_date_filter($query, $_GET['lead_date_filter']);
-        }
+        $meta_query = []; // Initialize array for meta queries
+        $date_query_args = []; // Initialize array for date query arguments
 
-        // Handle the 'assigned_user' filter if set
+       
+
+        // 2. Handle Assigned User filter
         if (!empty($_GET['assigned_user'])) {
-            $query->set('meta_query', [
-                [
-                    'key' => 'assigned_user',
-                    'value' => $_GET['assigned_user'],
-                    'compare' => '='
-                ]
-            ]);
-        }
-           // Handle sorting by postcode
-        if (isset($query->query_vars['orderby']) && 'postcode' === $query->query_vars['orderby']) {
-            $query->set('meta_key', 'postcode');
-            $query->set('orderby', 'meta_value');
+            $meta_query[] = [
+                'key' => 'assigned_user',
+                'value' => $_GET['assigned_user'],
+                'compare' => '='
+            ];
         }
 
-        // Handle postcode search
-        if (!empty($_GET['lead_postcode_search'])) {
-            $search_term = sanitize_text_field($_GET['lead_postcode_search']);
-            $meta_query = $query->get('meta_query'); // Get existing meta_query if any
-            if (empty($meta_query)) {
-                $meta_query = [];
+        // Apply meta_query if any conditions exist
+        if (!empty($meta_query)) {
+            // If there are multiple meta queries, ensure they are combined with 'AND' relation
+            if (count($meta_query) > 1) {
+                $meta_query['relation'] = 'AND';
             }
-            $meta_query[] = [
-                'key' => 'postcode',
-                'value' => $search_term . '%', // Search for postcodes starting with the term
-                'compare' => 'LIKE',
-            ];
             $query->set('meta_query', $meta_query);
         }
 
-        // Handle sorting by postcode
+        // 3. Handle Date filter
+        if (!empty($_GET['lead_date_filter'])) {
+            // Re-using logic to populate date query arguments based on selected filter
+            $start_of_week = get_option('start_of_week', 0); // 0 (Sunday) to 6 (Saturday)
+            $current_day_of_week = date('w'); // Current day of week
+
+            switch ($_GET['lead_date_filter']) {
+                case 'today':
+                    $today = current_time('Y-m-d');
+                    $date_query_args = [
+                        'after' => $today . ' 00:00:00',
+                        'before' => $today . ' 23:59:59',
+                        'inclusive' => true,
+                    ];
+                    break;
+                case 'yesterday':
+                    $yesterday = date('Y-m-d', strtotime('-1 day'));
+                    $date_query_args = [
+                        'year' => date('Y', $yesterday),
+                        'month' => date('m', $yesterday),
+                        'day' => date('d', $yesterday)
+                    ];
+                    break;
+                case 'this_week':
+                    $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
+                    $startOfWeek = date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
+                    $endOfWeek = date('Y-m-d', strtotime($startOfWeek . ' +6 days'));
+                    $date_query_args = [
+                        'after' => $startOfWeek . ' 00:00:00',
+                        'before' => $endOfWeek . ' 23:59:59',
+                        'inclusive' => true,
+                    ];
+                    break;
+                case 'last_week':
+                    $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
+                    $startOfThisWeek = date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
+                    $startOfLastWeek = date('Y-m-d', strtotime($startOfThisWeek . ' -7 days'));
+                    $endOfLastWeek = date('Y-m-d', strtotime($startOfThisWeek . ' -1 day'));
+                    $date_query_args = [
+                        'after' => $startOfLastWeek . ' 00:00:00',
+                        'before' => $endOfLastWeek . ' 23:59:59',
+                        'inclusive' => true,
+                    ];
+                    break;
+                case 'this_month':
+                    $start_of_month = date('Y-m-01');
+                    $date_query_args = [
+                        'after' => $start_of_month . ' 00:00:00',
+                        'inclusive' => true,
+                    ];
+                    break;
+                case 'last_month':
+                    $start_of_last_month = date('Y-m-01', strtotime('first day of last month'));
+                    $end_of_last_month = date('Y-m-t', strtotime('last day of last month'));
+                    $date_query_args = [
+                        'after' => $start_of_last_month . ' 00:00:00',
+                        'before' => $end_of_last_month . ' 23:59:59',
+                        'inclusive' => true,
+                    ];
+                    break;
+            }
+            if (!empty($date_query_args)) {
+                $query->set('date_query', [$date_query_args]);
+            }
+        }
+
+        // 4. Handle sorting by postcode (should be last, affects orderby)
         if (isset($query->query_vars['orderby']) && 'postcode' === $query->query_vars['orderby']) {
             $query->set('meta_key', 'postcode');
             $query->set('orderby', 'meta_value');
         }
     }
+}
+add_filter('posts_where', 'lead_postcode_search_where', 10, 2);
+function lead_postcode_search_where($where, $query) {
+    global $wpdb;
+
+    // Only apply if it's the main query on the leads admin page
+    if (is_admin() && $query->is_main_query() && isset($query->query_vars['post_type']) && $query->query_vars['post_type'] === 'lead') {
+        if (!empty($_GET['lead_postcode_search'])) {
+            $search_term = sanitize_text_field($_GET['lead_postcode_search']);
+            // Escape the search term for LIKE, then manually add the wildcard
+            $escaped_search_term = $wpdb->esc_like($search_term);
+            $where .= " AND EXISTS (SELECT 1 FROM {$wpdb->postmeta} WHERE post_id = {$wpdb->posts}.ID AND meta_key = 'postcode' AND meta_value LIKE '{$escaped_search_term}%')";
+
+            // Clear the default 's' query var to prevent double searching if it's still active
+            $query->set('s', '');
+        }
+    }
+    return $where;
 }
 
 function apply_date_filter(&$query, $filter_value) {
