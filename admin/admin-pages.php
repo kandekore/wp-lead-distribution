@@ -382,31 +382,40 @@ function render_regions_and_users_admin_page() {
                     $lead_reception = 'N/A';
                 }
 
-                // Retrieve the user's selected postcode areas (assuming stored in user meta)
-                $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
+            //   $user_info = get_userdata($user_id); // Ensure $user_info is consistently used here
 
-                // Display user info and links
-                $edit_user_link = get_edit_user_link($user_id);
-                echo "<p><strong><a href='" . esc_url($edit_user_link) . "'>" . esc_html($user_info->display_name) . "</a> ({$user_info->user_email})</strong>: ";
+      $user_info = get_userdata($user_id); // Ensure $user_info is consistently used here
 
-                // Show credits for pre-pay users and lead reception for post-pay users
-                if ($is_post_pay) {
-                    echo "Lead Reception: {$lead_reception}";
-                } elseif ($is_subscriber) {
-                    echo "Lead Reception: {$lead_reception} (Credits: {$user_credits})";
-                } else {
-                    echo "Credits: {$user_credits}";
-                }
+            // Retrieve the user's *entire* selected postcode areas
+            // We fetch the full selection once, then access the specific region's codes
+            $selected_postcode_areas_for_user = json_decode(get_user_meta($user_id, 'selected_postcode_areas', true), true);
 
-                // Display the user's assigned postcodes for the region
-                echo "; Postcodes: ";
-                if (!empty($selected_postcode_areas[$region])) {
-                    echo implode(', ', $selected_postcode_areas[$region]);
-                } else {
-                    echo "None";
-                }
+            // Display user info and links
+            $edit_user_link = get_edit_user_link($user_id);
+            echo "<p><strong><a href='" . esc_url($edit_user_link) . "'>" . esc_html($user_info->display_name) . "</a> ({$user_info->user_email})</strong>: ";
 
-                echo "</p>";
+            // Show credits for pre-pay users and lead reception for post-pay users
+            if ($is_post_pay) {
+                echo "Lead Reception: {$lead_reception}";
+            } elseif ($is_subscriber) {
+                echo "Lead Reception: {$lead_reception} (Credits: {$user_credits})";
+            } else {
+                echo "Credits: {$user_credits}";
+            }
+
+            // Display ONLY the postcodes selected by the user for the CURRENT region being iterated ($region)
+            echo "; Postcodes: ";
+            // Check if the current user has selected postcodes for this specific $region
+            if (!empty($selected_postcode_areas_for_user[$region]) && is_array($selected_postcode_areas_for_user[$region])) {
+                // Ensure unique and sort for consistent display
+                $region_specific_codes = array_unique($selected_postcode_areas_for_user[$region]);
+                sort($region_specific_codes); // Optional: sort alphabetically
+                echo esc_html(implode(', ', $region_specific_codes));
+            } else {
+                echo "None";
+            }
+
+            echo "</p>";
             }
         }
     }
@@ -1009,6 +1018,8 @@ function delete_lead_campaign_string($string) {
     }
 }
 
+// Tab 3: Campaign URL Search
+// Tab 3: Campaign URL Search
 function render_campaign_search_tab() {
     $selected_filter = isset($_GET['date_filter']) ? sanitize_text_field($_GET['date_filter']) : 'this_month'; // Default filter
 
