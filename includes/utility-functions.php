@@ -53,6 +53,7 @@ function store_lead($lead_data, $user_id) {
             'utm_source'  => $lead_data['utm_source'],    // Store utm_source directly
             'vt_keyword'  => $lead_data['vt_keyword'],    // Store vt_keyword directly
             'vt_adgroup'  => $lead_data['vt_adgroup'],    // Store vt_adgroup directly
+            'milage' => $lead_data['milage'], 
         ],
     ];
 
@@ -108,9 +109,27 @@ function filter_leads_by_custom_filters($query) {
         $meta_query = []; // Initialize array for meta queries
         $date_query_args = []; // Initialize array for date query arguments
 
-       
+        // Check if ANY custom filter is active (date, assigned user, or postcode search)
+        $custom_filter_active = !empty($_GET['lead_date_filter']) || !empty($_GET['assigned_user']) || !empty($_GET['lead_postcode_search']);
 
-        // 2. Handle Assigned User filter
+        if ($custom_filter_active) {
+            // Crucial: Always clear default search ('s') and month ('m') parameters
+            // if any of our custom filters are actively being used.
+            $query->set('s', '');
+            $query->set('m', '');
+        }
+
+        // 1. Handle Postcode Search (remains as fixed previously)
+        // if (!empty($_GET['lead_postcode_search'])) {
+        //     $search_term = sanitize_text_field($_GET['lead_postcode_search']);
+        //     $meta_query[] = [
+        //         'key' => 'postcode',
+        //         'value' => $search_term . '%', // Search for postcodes starting with the term
+        //         'compare' => 'LIKE',
+        //     ];
+        // }
+
+        // 2. Handle Assigned User filter (remains as fixed previously)
         if (!empty($_GET['assigned_user'])) {
             $meta_query[] = [
                 'key' => 'assigned_user',
@@ -128,33 +147,36 @@ function filter_leads_by_custom_filters($query) {
             $query->set('meta_query', $meta_query);
         }
 
-        // 3. Handle Date filter
+        // 3. Handle Date filter (UPDATED to use wp_date consistently for date boundaries)
         if (!empty($_GET['lead_date_filter'])) {
-            // Re-using logic to populate date query arguments based on selected filter
             $start_of_week = get_option('start_of_week', 0); // 0 (Sunday) to 6 (Saturday)
-            $current_day_of_week = date('w'); // Current day of week
+            $current_day_of_week = (int) wp_date('w'); // Get current day of week using wp_date
 
             switch ($_GET['lead_date_filter']) {
                 case 'today':
-                    $today = current_time('Y-m-d');
+                    $today_start = wp_date('Y-m-d 00:00:00');
+                    $today_end = wp_date('Y-m-d 23:59:59');
                     $date_query_args = [
-                        'after' => $today . ' 00:00:00',
-                        'before' => $today . ' 23:59:59',
+                        'after' => $today_start,
+                        'before' => $today_end,
                         'inclusive' => true,
                     ];
                     break;
                 case 'yesterday':
-                    $yesterday = date('Y-m-d', strtotime('-1 day'));
+                    // Calculate start and end of yesterday using wp_date and strtotime
+                    $yesterday_start = wp_date('Y-m-d 00:00:00', strtotime('-1 day'));
+                    $yesterday_end = wp_date('Y-m-d 23:59:59', strtotime('-1 day'));
                     $date_query_args = [
-                        'year' => date('Y', $yesterday),
-                        'month' => date('m', $yesterday),
-                        'day' => date('d', $yesterday)
+                        'after' => $yesterday_start,
+                        'before' => $yesterday_end,
+                        'inclusive' => true,
                     ];
                     break;
                 case 'this_week':
+                    // Adjust calculations to use wp_date consistently
                     $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
-                    $startOfWeek = date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
-                    $endOfWeek = date('Y-m-d', strtotime($startOfWeek . ' +6 days'));
+                    $startOfWeek = wp_date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
+                    $endOfWeek = wp_date('Y-m-d', strtotime($startOfWeek . ' +6 days'));
                     $date_query_args = [
                         'after' => $startOfWeek . ' 00:00:00',
                         'before' => $endOfWeek . ' 23:59:59',
@@ -162,10 +184,11 @@ function filter_leads_by_custom_filters($query) {
                     ];
                     break;
                 case 'last_week':
+                    // Adjust calculations to use wp_date consistently
                     $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
-                    $startOfThisWeek = date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
-                    $startOfLastWeek = date('Y-m-d', strtotime($startOfThisWeek . ' -7 days'));
-                    $endOfLastWeek = date('Y-m-d', strtotime($startOfThisWeek . ' -1 day'));
+                    $startOfThisWeek = wp_date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
+                    $startOfLastWeek = wp_date('Y-m-d', strtotime($startOfThisWeek . ' -7 days'));
+                    $endOfLastWeek = wp_date('Y-m-d', strtotime($startOfThisWeek . ' -1 day'));
                     $date_query_args = [
                         'after' => $startOfLastWeek . ' 00:00:00',
                         'before' => $endOfLastWeek . ' 23:59:59',
@@ -173,18 +196,21 @@ function filter_leads_by_custom_filters($query) {
                     ];
                     break;
                 case 'this_month':
-                    $start_of_month = date('Y-m-01');
+                    $start_of_month = wp_date('Y-m-01'); // Use wp_date
+                    $end_of_month = wp_date('Y-m-t 23:59:59'); // Get last day of month and add end time
                     $date_query_args = [
                         'after' => $start_of_month . ' 00:00:00',
+                        'before' => $end_of_month,
                         'inclusive' => true,
                     ];
                     break;
                 case 'last_month':
-                    $start_of_last_month = date('Y-m-01', strtotime('first day of last month'));
-                    $end_of_last_month = date('Y-m-t', strtotime('last day of last month'));
+                    // Adjust calculations to use wp_date consistently
+                    $start_of_last_month = wp_date('Y-m-01', strtotime('first day of last month'));
+                    $end_of_last_month = wp_date('Y-m-t 23:59:59', strtotime('last day of last month'));
                     $date_query_args = [
                         'after' => $start_of_last_month . ' 00:00:00',
-                        'before' => $end_of_last_month . ' 23:59:59',
+                        'before' => $end_of_last_month,
                         'inclusive' => true,
                     ];
                     break;
@@ -194,27 +220,28 @@ function filter_leads_by_custom_filters($query) {
             }
         }
 
-        // 4. Handle sorting by postcode (should be last, affects orderby)
+        // 4. Handle sorting by postcode (remains as fixed previously, affects orderby)
         if (isset($query->query_vars['orderby']) && 'postcode' === $query->query_vars['orderby']) {
             $query->set('meta_key', 'postcode');
             $query->set('orderby', 'meta_value');
         }
     }
 }
+// Re-add the posts_where filter for postcode search, which previously worked
 add_filter('posts_where', 'lead_postcode_search_where', 10, 2);
+
 function lead_postcode_search_where($where, $query) {
     global $wpdb;
 
-    // Only apply if it's the main query on the leads admin page
+    // Only apply if it's the main query on the leads admin page and our custom search parameter is present
     if (is_admin() && $query->is_main_query() && isset($query->query_vars['post_type']) && $query->query_vars['post_type'] === 'lead') {
         if (!empty($_GET['lead_postcode_search'])) {
             $search_term = sanitize_text_field($_GET['lead_postcode_search']);
             // Escape the search term for LIKE, then manually add the wildcard
             $escaped_search_term = $wpdb->esc_like($search_term);
+            // Ensure this is added as an AND condition to existing WHERE clause
+            // This EXISTS subquery is robust for meta_key LIKE searches
             $where .= " AND EXISTS (SELECT 1 FROM {$wpdb->postmeta} WHERE post_id = {$wpdb->posts}.ID AND meta_key = 'postcode' AND meta_value LIKE '{$escaped_search_term}%')";
-
-            // Clear the default 's' query var to prevent double searching if it's still active
-            $query->set('s', '');
         }
     }
     return $where;

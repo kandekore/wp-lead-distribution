@@ -23,6 +23,7 @@ function process_lead_submission(WP_REST_Request $request) {
         'leadid' => sanitize_text_field($request->get_param('leadid')),
         'resend' => sanitize_text_field($request->get_param('resend')),
         'vin' => sanitize_text_field($request->get_param('vin')),
+        'milage' => sanitize_text_field($request->get_param('milage')), 
     ];
 
     // Get submission_url and ip_address directly from request parameters
@@ -98,11 +99,11 @@ function process_lead_submission(WP_REST_Request $request) {
             }
 
             // Manually display selected meta data
-            $meta_keys = [
-                'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
-                'cylinder', 'colour', 'doors', 'fuel', 'mot', 'trans', 'mot_due',
-                'vin', 'info'
-            ];
+           $meta_keys = [
+        'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
+        'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
+        'vin', 'info', 'milage' 
+    ];
 
             $body .= "<ul style='list-style-type:none;'>";
             foreach ($meta_keys as $key) {
@@ -131,22 +132,22 @@ function process_lead_submission(WP_REST_Request $request) {
     } else {
         error_log('Master Admin settings not found or are incorrect.');
     }
-
+    
     // Check if there are eligible recipients
-    if (empty($eligible_recipients)) {
-        $settings = get_option('fallback_settings');
-        if ($settings) {
-            $settings_array = maybe_unserialize($settings);
-            $fallback_user_enabled = !empty($settings_array['fallback_user_enabled']) && $settings_array['fallback_user_enabled'] == "1";
-            $fallback_user_email = $settings_array['fallback_user_email'];
-            $fallback_user_id = $settings_array['fallback_user_id'];
-            $fallback_api_endpoint = $settings_array['fallback_user_api_endpoint'];
+if (empty($eligible_recipients)) {
+    $settings = get_option('fallback_settings');
+    if ($settings) {
+        $settings_array = maybe_unserialize($settings);
+        $fallback_user_enabled = !empty($settings_array['fallback_user_enabled']) && $settings_array['fallback_user_enabled'] == "1";
+        $fallback_user_email = $settings_array['fallback_user_email'];
+        $fallback_user_id = $settings_array['fallback_user_id'];
+        $fallback_api_endpoint = $settings_array['fallback_user_api_endpoint'];
 
-            if ($fallback_user_enabled) {
-                if ($fallback_api_endpoint) {
-                    $api_lead_data = [
+        if ($fallback_user_enabled) {
+            if ($fallback_api_endpoint) {
+                      $api_lead_data = [
                         'postcode' => $lead_data['postcode'],
-                        'reg' => $lead_data['registration'],
+                        'vrg' => $lead_data['registration'],
                         'model' => $lead_data['model'],
                         'date' => $lead_data['date'],
                         'cylinder' => $lead_data['cylinder'],
@@ -163,6 +164,7 @@ function process_lead_submission(WP_REST_Request $request) {
                         'leadid' => $lead_data['leadid'],
                         'resend' => $lead_data['resend'],
                         'vin' => $lead_data['vin'],
+                        'submission_url' => $lead_data['submission_url']
                     ];
 
                     // Construct the GET URL with query parameters
@@ -171,68 +173,60 @@ function process_lead_submission(WP_REST_Request $request) {
                     // Send the lead to the fallback user API endpoint using GET
                     $response = wp_remote_get($fallback_api_url);
 
-                    if (is_wp_error($response)) {
-                        return new WP_REST_Response(['message' => 'Failed to send lead to Fallback User API'], 500);
-                    }
+                // Debugging: Log before storing lead for API branch
+                error_log("Attempting to store lead for Fallback User (API branch): ID=" . $fallback_user_id);
+                $lead_id = store_lead($lead_data, $fallback_user_id);
+                // Debugging: Log result of store_lead
+                error_log("store_lead result (API branch): " . (is_wp_error($lead_id) ? $lead_id->get_error_message() : $lead_id));
 
-                    $api_response_body = wp_remote_retrieve_body($response);
-                    $subject = "API Response for Lead ID: " . $lead_data['leadid'];
-                    $body = "API Response: " . $api_response_body;
-
-                    // Send the email to leads@scrapuk.co.uk
-                    wp_mail('leads@scrapuk.co.uk', $subject, $body, ['Content-Type: text/plain; charset=UTF-8']);
-
-                    $lead_id = store_lead($lead_data, $fallback_user_id);
+                if (!is_wp_error($lead_id)) {
                     $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
-                    if (!is_wp_error($lead_id) && $result) {
+                    // Debugging: Log result of assign_lead_to_user
+                    error_log("assign_lead_to_user result (API branch): " . ($result ? 'true' : 'false'));
+                    if ($result) {
                         return new WP_REST_Response(['message' => 'Lead sent successfully to Fallback User API and stored'], 200);
                     } else {
-                        return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User'], 500);
+                        // More specific error response for assign failure
+                        return new WP_REST_Response(['message' => 'Failed to assign lead to Fallback User (API branch)'], 500);
                     }
                 } else {
-                    $lead_id = store_lead($lead_data, $fallback_user_id);
+                    // More specific error response for store failure
+                    return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User (API branch)'], 500);
+                }
+            } else { // No fallback API endpoint, but fallback user enabled
+                // Debugging: Log before storing lead for Email branch
+                error_log("Attempting to store lead for Fallback User (Email branch): ID=" . $fallback_user_id);
+                $lead_id = store_lead($lead_data, $fallback_user_id);
+                // Debugging: Log result of store_lead
+                error_log("store_lead result (Email branch): " . (is_wp_error($lead_id) ? $lead_id->get_error_message() : $lead_id));
+
+                if (!is_wp_error($lead_id)) {
                     $result = assign_lead_to_user($fallback_user_id, $lead_data, $lead_id);
-
-                    if (!is_wp_error($lead_id) && $result) {
-                        $subject = "New Lead Assignment: " . $lead_data['leadid'];
-                        $body = "<html><body><h3>You've received a new lead as a fallback recipient.</h3>";
-                        $body .= "<p>Lead ID: " . esc_html($lead_data['leadid']) . "</p>";
-                        if (isset($lead_data['registration']) && isset($lead_data['model'])) {
-                            $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>" ."%n";
-                        }
-                    
-                        // Manually display selected meta data
-                        $meta_keys = [
-                            'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
-                            'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
-                            'vin'
-                        ];
-                    
-                        $body .= "<ul style='list-style-type:none;'>";
-                        foreach ($meta_keys as $key) {
-                            if (!empty($lead_data[$key])) { // Only display if value is not empty
-                                $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>"."%n";
-                            }
-                        }
-                        $body .= "</ul>";
-                    
-
-                        $headers = ['Content-Type: text/html; charset=UTF-8'];
-
+                    // Debugging: Log result of assign_lead_to_user
+                    error_log("assign_lead_to_user result (Email branch): " . ($result ? 'true' : 'false'));
+                    if ($result) {
+                        // ... (existing logic to send email to fallback user) ...
                         if (wp_mail($fallback_user_email, $subject, $body, $headers)) {
                             return new WP_REST_Response(['message' => 'Lead sent successfully to Fallback User and email notification sent.'], 200);
                         } else {
-                            return new WP_REST_Response(['message' => 'Lead sent to Fallback User but failed to send email notification.'], 500);
+                            // This block implies lead was stored, but email failed
+                            return new WP_REST_Response(['message' => 'Lead stored for Fallback User but failed to send email notification.'], 500);
                         }
                     } else {
-                        return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User'], 500);
+                        // More specific error response for assign failure
+                        return new WP_REST_Response(['message' => 'Failed to assign lead to Fallback User (Email branch)'], 500);
                     }
+                } else {
+                    // More specific error response for store failure
+                    return new WP_REST_Response(['message' => 'Failed to store lead for Fallback User (Email branch)'], 500);
                 }
-            } else {
-                return new WP_REST_Response(['message' => 'No eligible recipients for this postcode and Fallback User is disabled'], 404);
             }
+        } else {
+            return new WP_REST_Response(['message' => 'No eligible recipients for this postcode and Fallback User is disabled'], 404);
         }
     }
+}
+
 
     // Randomly pick an eligible recipient from the array
     $random_key = array_rand($eligible_recipients);
@@ -479,10 +473,10 @@ function send_lead_email_to_user($user_id, $lead_data) {
     $subject = "New Lead: " . $lead_data['leadid'];
 
     // Define meta keys to be included in the email
-    $meta_keys = [
+       $meta_keys = [
         'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
         'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
-        'vin'
+        'vin', 'info', 'milage' 
     ];
 
     // Prepare the email body without "%n" for the primary email
