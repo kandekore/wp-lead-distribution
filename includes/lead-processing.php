@@ -55,7 +55,7 @@ function process_lead_submission(WP_REST_Request $request) {
     }
     $lead_data['source_domain'] = $source_domain;
     $postcode_prefix = substr($lead_data['postcode'], 0, 2);
-    $eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix, $lead_data['vin']);
+$eligible_recipients = get_eligible_recipients_for_lead($postcode_prefix, $lead_data['vin'], $lead_data['model']);
 
     // Deserialize your settings array
     $settings = get_option('master_admin_settings');
@@ -248,67 +248,130 @@ if (empty($eligible_recipients)) {
     }
 }
 
-function get_eligible_recipients_for_lead($postcode_prefix, $lead_vin) {
-    $eligible_recipients = [];
-    $users = get_users(); // Consider refining this query based on your needs
+function get_eligible_recipients_for_lead($postcode_prefix, $lead_vin, $lead_model) {
+    $priority_eligible_users = []; // Users who match postcode, credits/role, AND model preference
+    $general_eligible_users = [];  // Users who match postcode, credits/role, AND have NO model preference
 
-    // Loop through each user to check their role, credits, and selected postcode areas
-    foreach ($users as $user) {
-        $selected_postcode_areas = json_decode(get_user_meta($user->ID, 'selected_postcode_areas', true), true);
+    $all_users = get_users(); // Fetch all users once
 
-        // If the user is a post-pay user and lead reception is enabled
-        if (in_array('post_pay', $user->roles) && get_user_meta($user->ID, 'enable_lead_reception', true) === '1') {
-            if (!empty($selected_postcode_areas)) {
-                foreach ($selected_postcode_areas as $region => $codes) {
-                    foreach ($codes as $code) {
-                        $codePattern = str_replace("#", "[0-9]", $code);
-                        if (preg_match("/^$codePattern/", $postcode_prefix)) {
-                            // Add the user to the eligible recipients array
-                            $eligible_recipients[] = $user->ID;
+    foreach ($all_users as $user) {
+        $user_id = $user->ID;
+        $selected_postcode_areas = json_decode(get_user_meta($user_id, 'selected_postcode_areas', true), true);
+        $user_credits = (int) get_user_meta($user_id, '_user_credits', true);
+        $is_post_pay = in_array('post_pay', $user->roles);
+        $lead_reception_enabled = get_user_meta($user_id, 'enable_lead_reception', true) === '1';
+        $lead_reception_disabled_for_subscriber = get_user_meta($user_id, 'disable_lead_reception', true) === '1';
 
-                            // Check if the user has lead priority enabled
-                            if (get_user_meta($user->ID, 'lead_priority', true) === '1') {
-                                // Add the user 3x to increase their chances
-                                $eligible_recipients[] = $user->ID;
-                                $eligible_recipients[] = $user->ID;
-                                $eligible_recipients[] = $user->ID;
-                            }
-                            break 2;
-                        }
-                    }
-                }
-            }
-        } elseif (!in_array('post_pay', $user->roles)) {
-            $lead_reception_disabled = get_user_meta($user->ID, 'disable_lead_reception', true);
-            $user_credits = (int) get_user_meta($user->ID, '_user_credits', true);
 
-            if ($user_credits > 0 && empty($lead_reception_disabled) && !empty($selected_postcode_areas)) {
-                foreach ($selected_postcode_areas as $region => $codes) {
-                    foreach ($codes as $code) {
-                        $codePattern = str_replace("#", "[0-9]", $code);
-                        if (preg_match("/^$codePattern/", $postcode_prefix)) {
-                            // Add the user to the eligible recipients array
-                            $eligible_recipients[] = $user->ID;
-
-                            // Check if the user has lead priority enabled
-                            if (get_user_meta($user->ID, 'lead_priority', true) === '1') {
-                                // Add the user again to increase their chances
-                                $eligible_recipients[] = $user->ID;
-                            }
-                            break 2;
-                        }
+        // First, check general eligibility (postcode and credits/reception status)
+        $is_postcode_eligible = false;
+        if (!empty($selected_postcode_areas)) {
+            foreach ($selected_postcode_areas as $region => $codes) {
+                foreach ($codes as $code) {
+                    $codePattern = str_replace("#", "[0-9]", $code);
+                    if (preg_match("/^$codePattern/", $postcode_prefix)) {
+                        $is_postcode_eligible = true;
+                        break 2; // Matched postcode, break out of inner loops
                     }
                 }
             }
         }
+
+        if (!$is_postcode_eligible) continue; // Not eligible by postcode, move to next user
+
+        // Apply credit/role checks for general eligibility
+        if ($is_post_pay) {
+            if ($lead_reception_enabled === '0') continue; // Post-pay with reception disabled, move to next user
+        } elseif (!in_array('post_pay', $user->roles)) { // Pre-pay user
+            if ($user_credits <= 0 || $lead_reception_disabled_for_subscriber === '1') continue; // Pre-pay without credits or reception disabled, move to next user
+        }
+
+
+        // Now, check for model preference match for this lead
+        $user_car_models_json = get_user_meta($user_id, '_user_car_models', true);
+        $user_car_models = json_decode($user_car_models_json, true);
+
+        $user_has_model_preferences_defined = is_array($user_car_models) && !empty($user_car_models);
+        $has_matching_model_preference = false; // Flag if the lead's model matches user's preference
+
+        if ($user_has_model_preferences_defined && !empty($lead_model)) {
+            foreach ($user_car_models as $allowed_model_prefix) {
+                // Case-insensitive 'starts with' check for lead model
+                if (strncasecmp($lead_model, $allowed_model_prefix, strlen($allowed_model_prefix)) === 0) {
+                    $has_matching_model_preference = true;
+                    break; // Found a matching model preference, no need to check further models for this user
+                }
+            }
+        }
+
+        // Categorize user based on whether they have model preferences and if the lead matches
+        if ($user_has_model_preferences_defined) {
+            // User has specified model preferences. They ONLY get leads matching these.
+            if ($has_matching_model_preference) {
+                $priority_eligible_users[] = $user_id;
+            } else {
+                // Lead model does NOT match their preference. Exclude this user entirely for this lead.
+                continue; // Skip to the next user in the foreach loop
+            }
+        } else {
+            // User has NOT specified model preferences. They receive ALL models (general recipients).
+            $general_eligible_users[] = $user_id;
+        }
     }
 
-    // Remove users who already own a lead with the same VIN
-    $eligible_recipients = filter_out_lead_owners_by_vin($eligible_recipients, $lead_vin);
+    // Combine all eligible users (before VIN filtering) for the VIN check
+    $all_pre_vin_eligible_users = array_merge($priority_eligible_users, $general_eligible_users);
+    $all_pre_vin_eligible_users = array_unique($all_pre_vin_eligible_users); // Ensure uniqueness before VIN filter
 
-    return $eligible_recipients;
+    // Apply VIN filtering to get the final list of users who are eligible AND don't own this VIN
+    $vin_filtered_eligible_users = filter_out_lead_owners_by_vin($all_pre_vin_eligible_users, $lead_vin);
+
+    // Re-categorize users after VIN filtering and apply lead priority weighting
+    $final_priority_recipients = [];
+    $final_general_recipients = [];
+
+    foreach ($vin_filtered_eligible_users as $user_id) {
+        // Re-check model preference (needed because VIN filter might remove users)
+        $user_car_models_json = get_user_meta($user_id, '_user_car_models', true);
+        $user_car_models = json_decode($user_car_models_json, true);
+        $has_matching_model_preference = false; // Reset flag for re-evaluation
+        if (is_array($user_car_models) && !empty($user_car_models) && !empty($lead_model)) {
+            foreach ($user_car_models as $allowed_model_prefix) {
+                if (strncasecmp($lead_model, $allowed_model_prefix, strlen($allowed_model_prefix)) === 0) {
+                    $has_matching_model_preference = true;
+                    break;
+                }
+            }
+        }
+
+        $user_lead_priority = get_user_meta($user_id, 'lead_priority', true) === '1';
+
+        // Apply lead priority weighting based on the new prioritization tiers
+        if ($has_matching_model_preference) {
+            $final_priority_recipients[] = $user_id; // Base entry for model-specific recipient
+            if ($user_lead_priority) {
+                // Add 3 extra entries for model-specific users with general lead priority
+                $final_priority_recipients[] = $user_id;
+                $final_priority_recipients[] = $user_id;
+                $final_priority_recipients[] = $user_id;
+            }
+        } else {
+            $final_general_recipients[] = $user_id; // Base entry for general recipient
+            if ($user_lead_priority) {
+                // Add 1 extra entry for general users with general lead priority
+                $final_general_recipients[] = $user_id;
+            }
+        }
+    }
+
+    // Prioritize model-specific recipients: If any exist, distribute only among them.
+    if (!empty($final_priority_recipients)) {
+        return $final_priority_recipients;
+    }
+
+    // Otherwise, fallback to general recipients.
+    return $final_general_recipients;
 }
-
 
 // Helper function to filter out users who already own a lead with the same VIN
 function filter_out_lead_owners_by_vin($eligible_recipients, $lead_vin) {

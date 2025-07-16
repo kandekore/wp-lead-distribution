@@ -32,6 +32,55 @@ function enqueue_custom_admin_scripts($hook) {
 }
 add_action('admin_enqueue_scripts', 'enqueue_custom_admin_scripts');
 
+add_action('show_user_profile', 'add_user_car_models_field');
+add_action('edit_user_profile', 'add_user_car_models_field');
+
+function add_user_car_models_field($user) {
+    // Only show this section to users with 'edit_users' capability (typically Administrators)
+    if (!current_user_can('edit_users')) {
+        return;
+    }
+
+    $saved_models_json = get_user_meta($user->ID, '_user_car_models', true);
+    $saved_models_array = json_decode($saved_models_json, true);
+    // Convert array to newline-separated string for textarea
+    $models_text = is_array($saved_models_array) ? implode("\n", $saved_models_array) : '';
+    ?>
+    <h3><?php _e("Specific Car Models for Lead Reception", "text-domain"); ?></h3>
+    <table class="form-table">
+        <tr>
+            <th><label for="user_car_models"><?php _e("Allowed Car Models (one per line)", "text-domain"); ?></label></th>
+            <td>
+                <textarea name="user_car_models" id="user_car_models" rows="5" cols="30" class="large-text code"><?php echo esc_textarea($models_text); ?></textarea>
+                <p class="description"><?php _e("Enter car models this user should exclusively receive leads for. Leads must match selected postcodes AND start with one of these models (case-insensitive). Enter one model prefix per line (e.g., BMW, Mercedes C Class, Ford Focus). If empty, this user receives all models matching their postcodes.", "text-domain"); ?></p>
+            </td>
+        </tr>
+    </table>
+    <?php
+}
+
+// Save Car Models field from the user profile page
+add_action('personal_options_update', 'save_user_car_models_field');
+add_action('edit_user_profile_update', 'save_user_car_models_field');
+
+function save_user_car_models_field($user_id) {
+    // Only process if user has 'edit_users' capability
+    if (!current_user_can('edit_users', $user_id)) {
+        return;
+    }
+
+    if (isset($_POST['user_car_models'])) {
+        $models_input = sanitize_textarea_field($_POST['user_car_models']);
+        // Convert newline-separated string back to array, filter out empty lines and trim whitespace
+        $models_array = array_filter(array_map('trim', explode("\n", $models_input)));
+        // Store as JSON for easier retrieval
+        update_user_meta($user_id, '_user_car_models', wp_json_encode($models_array));
+    } else {
+        // If the field is not present in POST (e.g., if it's empty and not submitted), save an empty array
+        update_user_meta($user_id, '_user_car_models', wp_json_encode([]));
+    }
+}
+
 // Displaying selected postcode areas in order admin
 function display_order_postcode_selections_in_admin($order) {
     $selected_postcode_areas = json_decode(get_post_meta($order->get_id(), 'selected_postcode_areas', true), true);
