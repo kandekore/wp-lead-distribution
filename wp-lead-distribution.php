@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WordPress Lead Distribution
  * Description: Collects and distributes leads to users on a subscription basis.
- * Version: 3.0.0
+ * Version: 4.0.0
  * Author: D.Kandekore
  */
 
@@ -55,3 +55,11 @@ function enqueue_my_account_script() {
 }
 
 add_action('wp_enqueue_scripts', 'enqueue_my_account_script');
+
+add_action( 'woocommerce_subscription_payment_complete', 'wc_custom_credit_disable_scheduled_renewal' );
+
+function wc_custom_credit_disable_scheduled_renewal( $subscription ) {
+    // We set the next payment date to an empty string.
+    // This effectively "pauses" the subscription's internal clock.
+    $subscription->update_dates( array( 'next_payment' => '' ) );
+}

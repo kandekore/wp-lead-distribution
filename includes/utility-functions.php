@@ -684,3 +684,18 @@ function make_postcode_column_sortable($columns) {
     $columns['postcode'] = 'postcode'; // 'postcode' is the meta_key for sorting
     return $columns;
 }
+/**
+ * Helper function to get the currently active SMS provider URL from the database.
+ * @return string The active provider URL (e.g., '@txtlocal.co.uk') or empty string if none is set.
+ */
+function wc_custom_get_active_sms_provider_url() {
+    $options = get_option( 'wc_sms_providers' );
+    $active_key = isset( $options['active'] ) ? $options['active'] : '';
+    $providers = isset( $options['providers'] ) ? $options['providers'] : array();
+
+    if ( ! empty( $active_key ) && isset( $providers[ $active_key ] ) ) {
+        return $providers[ $active_key ]['url'];
+    }
+
+    return ''; // Return empty if no active provider is found
+}

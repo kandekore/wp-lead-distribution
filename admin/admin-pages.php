@@ -12,7 +12,7 @@ function register_my_plugin_menu_pages() {
     add_submenu_page('lead-management-dashboard', 'Regions and Users with Credits', 'Regions & Users', 'manage_options', 'regions-and-users-credits', 'render_regions_and_users_admin_page');
     add_submenu_page('lead-management-dashboard', 'Master Admin Settings', 'Master Admin Settings', 'manage_options', 'master-admin-settings', 'master_admin_settings_page');
     add_submenu_page('lead-management-dashboard', 'Fallback User Settings', 'Fallback User Settings', 'manage_options', 'fallback-user-settings', 'render_fallback_user_settings_page');
-
+add_submenu_page('lead-management-dashboard', 'SMS Provider Settings', 'SMS Providers', 'manage_options', 'sms-provider-settings', 'wc_custom_sms_settings_page_html');
     remove_submenu_page('lead-management-dashboard', 'lead-management-dashboard');
 }
 
@@ -1107,4 +1107,171 @@ function render_campaign_search_tab() {
     } else {
         echo '<p>Define campaign IDs above to see the report.</p>'; // Updated message
     }
+}
+/**
+ * =================================================================================
+ * DYNAMIC SMS PROVIDER MANAGEMENT
+ * =================================================================================
+ */
+
+// 1. Register the settings so WordPress can save them.
+add_action( 'admin_init', 'wc_custom_sms_settings_init' );
+function wc_custom_sms_settings_init() {
+    register_setting( 'sms_provider_page', 'wc_sms_providers' );
+
+    add_settings_section(
+        'wc_sms_providers_section',
+        'Manage Your SMS Providers',
+        'wc_custom_sms_section_callback',
+        'sms_provider_page'
+    );
+
+    add_settings_field(
+        'wc_sms_provider_list_field',
+        'Providers',
+        'wc_custom_sms_fields_callback',
+        'sms_provider_page',
+        'wc_sms_providers_section'
+    );
+}
+
+// 2. Callback for the section description.
+function wc_custom_sms_section_callback() {
+    echo '<p>Add multiple email-to-SMS providers and select which one is currently active. The format should be the domain part of the email, like <code>@txtlocal.co.uk</code>.</p>';
+}
+
+// 3. Function to render the main settings page container.
+function wc_custom_sms_settings_page_html() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    ?>
+    <div class="wrap">
+        <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+        <form action="options.php" method="post">
+            <?php
+            settings_fields( 'sms_provider_page' );
+            do_settings_sections( 'sms_provider_page' );
+            submit_button( 'Save Settings' );
+            ?>
+        </form>
+    </div>
+    <?php
+}
+
+// 4. This function renders the actual form fields: the list of providers and the "add new" form.
+function wc_custom_sms_fields_callback() {
+    $options = get_option( 'wc_sms_providers', array( 'providers' => array(), 'active' => '' ) );
+    $providers = isset( $options['providers'] ) ? $options['providers'] : array();
+    $active_provider = isset( $options['active'] ) ? $options['active'] : '';
+    ?>
+    <style>
+        .sms-provider-table { width: 100%; max-width: 600px; border-collapse: collapse; margin-bottom: 20px; }
+        .sms-provider-table th, .sms-provider-table td { padding: 8px 12px; border: 1px solid #ddd; text-align: left; }
+        .sms-provider-table th { background-color: #f7f7f7; }
+        .sms-provider-table .delete-btn { color: #b32d2e; cursor: pointer; text-decoration: underline; }
+        .add-new-provider-form { margin-top: 25px; padding-top: 20px; border-top: 1px solid #ccc; }
+    </style>
+
+    <div id="sms-provider-list">
+        <h4>Current Providers</h4>
+        <table class="sms-provider-table">
+            <thead>
+                <tr>
+                    <th>Active</th>
+                    <th>Provider Name</th>
+                    <th>URL Format</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if ( ! empty( $providers ) ) : ?>
+                    <?php foreach ( $providers as $key => $provider ) : ?>
+                        <tr>
+                            <td>
+                                <input type="radio" name="wc_sms_providers[active]" value="<?php echo esc_attr( $key ); ?>" <?php checked( $active_provider, $key ); ?>>
+                            </td>
+                            <td><?php echo esc_html( $provider['name'] ); ?></td>
+                            <td><code><?php echo esc_html( $provider['url'] ); ?></code></td>
+                            <td><span class="delete-btn" data-key="<?php echo esc_attr( $key ); ?>">Delete</span></td>
+                            <input type="hidden" name="wc_sms_providers[providers][<?php echo esc_attr( $key ); ?>][name]" value="<?php echo esc_attr( $provider['name'] ); ?>">
+                            <input type="hidden" name="wc_sms_providers[providers][<?php echo esc_attr( $key ); ?>][url]" value="<?php echo esc_attr( $provider['url'] ); ?>">
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else : ?>
+                    <tr>
+                        <td colspan="4">No providers have been added yet.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="add-new-provider-form">
+        <h4>Add New Provider</h4>
+        <p>
+            <label for="new_provider_name">Provider Name:</label><br>
+            <input type="text" id="new_provider_name" placeholder="e.g., Textlocal">
+        </p>
+        <p>
+            <label for="new_provider_url">URL Format:</label><br>
+            <input type="text" id="new_provider_url" placeholder="e.g., @txtlocal.co.uk">
+        </p>
+        <p>
+            <button type="button" class="button" id="add-new-sms-provider-btn">Add Provider</button>
+        </p>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add new provider
+        document.getElementById('add-new-sms-provider-btn').addEventListener('click', function() {
+            const nameInput = document.getElementById('new_provider_name');
+            const urlInput = document.getElementById('new_provider_url');
+            const name = nameInput.value.trim();
+            const url = urlInput.value.trim();
+
+            if (name === '' || url === '') {
+                alert('Please enter both a name and a URL format.');
+                return;
+            }
+            if (url.charAt(0) !== '@') {
+                alert('URL format must start with an "@" symbol.');
+                return;
+            }
+
+            const tableBody = document.querySelector('.sms-provider-table tbody');
+            const key = 'new_' + new Date().getTime();
+
+            if (tableBody.querySelector('td[colspan="4"]')) {
+                tableBody.innerHTML = '';
+            }
+
+            const newRow = `
+                <tr>
+                    <td><input type="radio" name="wc_sms_providers[active]" value="${key}"></td>
+                    <td>${name}</td>
+                    <td><code>${url}</code></td>
+                    <td><span class="delete-btn" data-key="${key}">Delete</span></td>
+                    <input type="hidden" name="wc_sms_providers[providers][${key}][name]" value="${name}">
+                    <input type="hidden" name="wc_sms_providers[providers][${key}][url]" value="${url}">
+                </tr>
+            `;
+            tableBody.insertAdjacentHTML('beforeend', newRow);
+
+            nameInput.value = '';
+            urlInput.value = '';
+        });
+
+        // Delete provider
+        document.querySelector('#sms-provider-list').addEventListener('click', function(e) {
+            if (e.target && e.target.classList.contains('delete-btn')) {
+                if (confirm('Are you sure you want to delete this provider?')) {
+                    e.target.closest('tr').remove();
+                }
+            }
+        });
+    });
+    </script>
+    <?php
 }

@@ -525,35 +525,28 @@ function assign_lead_to_user($user_id, $lead_data, $lead_id) {
     return true;
 }
 
+// --- THIS IS THE NEW, UPDATED CODE ---
 function send_lead_email_to_user($user_id, $lead_data) {
     // Retrieve user's email address
     $user_info = get_userdata($user_id);
     $to = $user_info->user_email;
 
-    // Retrieve user's phone number from user meta data
-    $user_phone = get_user_meta($user_id, 'billing_phone', true);
-
-    // Construct the email address from the phone number
-    $phone_email = $user_phone . '@txtlocal.co.uk';
-
     // Set the subject of the email
     $subject = "New Lead: " . $lead_data['leadid'];
 
-    // Define meta keys to be included in the email
-       $meta_keys = [
-        'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
-        'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
-        'vin', 'info', 'milage' 
-    ];
-
-    // Prepare the email body without "%n" for the primary email
+    // Start of the HTML email body
     $body = "<html><body>";
     $body .= "<h3>New Lead Details</h3>";
 
-    // Highlight registration and model if present
     if (isset($lead_data['registration']) && isset($lead_data['model'])) {
-        $body .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
+        $body .= "<h4>". esc_html($lead_data['leadid']) . " - ". esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
     }
+
+    $meta_keys = [
+        'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
+        'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
+        'vin'
+    ];
 
     $body .= "<ul style='list-style-type:none;'>";
     foreach ($meta_keys as $key) {
@@ -561,36 +554,34 @@ function send_lead_email_to_user($user_id, $lead_data) {
             $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>";
         }
     }
-    $body .= "</ul>";
-    $body .= "</body></html>";
+    $body .= "</ul></body></html>";
 
-    // Send the primary email without "%n" line breaks
-    $headers = array('Content-Type: text/html; charset=UTF-8');
-    $email_sent = wp_mail($to, $subject, $body, $headers);
+    // Set the main content type header
+    $headers = ['Content-Type: text/html; charset=UTF-8'];
 
-    // Prepare the email body with "%n" for the SMS email
-    $body_sms = "<html><body>";
-    $body_sms .= "<h3>New Lead Details</h3>%n";
+    // --- DYNAMIC SMS LOGIC ---
+    // 1. Get the active SMS provider URL from our new helper function
+    $sms_provider_url = wc_custom_get_active_sms_provider_url();
 
-    if (isset($lead_data['registration']) && isset($lead_data['model'])) {
-        $body_sms .= "<h4>" . esc_html($lead_data['leadid']) . " - " . esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>%n";
-    }
+    // 2. Check if a provider is set and if the user has a phone number
+    if ( !empty($sms_provider_url) ) {
+        $user_phone = get_user_meta($user_id, 'billing_phone', true);
 
-    $body_sms .= "<ul style='list-style-type:none;'>";
-    foreach ($meta_keys as $key) {
-        if (!empty($lead_data[$key])) {
-            $body_sms .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>%n";
+        if ( !empty($user_phone) ) {
+            // 3. Construct the dynamic email-to-sms address and add it as a CC header
+            $phone_email = $user_phone . $sms_provider_url;
+            $headers[] = 'Cc: ' . $phone_email;
+            error_log('SMS notice for lead ' . $lead_data['leadid'] . ' sent to: ' . $phone_email);
+        } else {
+            error_log('SMS notice for lead ' . $lead_data['leadid'] . ' failed: User ' . $user_id . ' has no phone number.');
         }
+    } else {
+         error_log('SMS notice for lead ' . $lead_data['leadid'] . ' failed: No active SMS provider is configured.');
     }
-    $body_sms .= "</ul>";
-    $body_sms .= "</body></html>";
+    // --- END DYNAMIC SMS LOGIC ---
 
-    // Send the SMS email with "%n" line breaks
-    $headers_sms = array('Content-Type: text/html; charset=UTF-8');
-    $sms_sent = wp_mail($phone_email, $subject, $body_sms, $headers_sms);
-
-    // Return true if both emails were sent successfully
-    return $email_sent && $sms_sent;
+    // Send email using wp_mail()
+    return wp_mail($to, $subject, $body, $headers);
 }
 
 
