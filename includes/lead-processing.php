@@ -26,16 +26,20 @@ function process_lead_submission(WP_REST_Request $request) {
         'milage' => sanitize_text_field($request->get_param('milage')), 
     ];
 
-    // Get submission_url and ip_address directly from request parameters
-    $submission_url = sanitize_url($request->get_param('submission_url'));
-    $ip_address = sanitize_text_field($request->get_param('ip_address'));
+// Get submission_url and ip_address directly from request parameters
+$submission_url = sanitize_url($request->get_param('submission_url'));
+$ip_address = sanitize_text_field($request->get_param('ip_address'));
 
-    // NEW: Get tracking parameters directly from request parameters
-    $vt_campaign = sanitize_text_field($request->get_param('vt_campaign'));
-    $utm_source  = sanitize_text_field($request->get_param('utm_source'));
-    $vt_keyword  = sanitize_text_field($request->get_param('vt_keyword'));
-    $vt_adgroup  = sanitize_text_field($request->get_param('vt_adgroup'));
+// Decode and parse query string
+$decoded_url = html_entity_decode($submission_url);
+$query_string = parse_url($decoded_url, PHP_URL_QUERY);
+parse_str($query_string, $query_params);
 
+// Get tracking params from request OR fallback to parsed URL
+$vt_campaign = sanitize_text_field($request->get_param('vt_campaign') ?: ($query_params['vt_campaign'] ?? ''));
+$utm_source  = sanitize_text_field($request->get_param('utm_source') ?: ($query_params['utm_source'] ?? ''));
+$vt_keyword  = sanitize_text_field($request->get_param('vt_keyword') ?: ($query_params['vt_keyword'] ?? ''));
+$vt_adgroup  = sanitize_text_field($request->get_param('vt_adgroup') ?: ($query_params['vt_adgroup'] ?? ''));
     // Assign all collected and extracted data to lead_data
     $lead_data['submission_url'] = $submission_url;
     $lead_data['ip_address'] = $ip_address;
