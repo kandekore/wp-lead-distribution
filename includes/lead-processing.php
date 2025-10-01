@@ -537,7 +537,7 @@ function send_lead_email_to_user($user_id, $lead_data) {
 
     // Define the keys to be included in the communications
     $meta_keys = [
-        'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
+         'leadid', 'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
         'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due', 'vin'
     ];
 
