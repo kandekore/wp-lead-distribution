@@ -525,65 +525,84 @@ function assign_lead_to_user($user_id, $lead_data, $lead_id) {
     return true;
 }
 
-// --- THIS IS THE NEW, UPDATED CODE ---
+
 function send_lead_email_to_user($user_id, $lead_data) {
-    // Retrieve user's email address
+    // =================================================================
+    // 1. SEND THE MAIN HTML EMAIL TO THE USER'S INBOX
+    // =================================================================
     $user_info = get_userdata($user_id);
     $to = $user_info->user_email;
-
-    // Set the subject of the email
     $subject = "New Lead: " . $lead_data['leadid'];
+    $headers = ['Content-Type: text/html; charset=UTF-8'];
 
-    // Start of the HTML email body
-    $body = "<html><body>";
-    $body .= "<h3>New Lead Details</h3>";
+    // Define the keys to be included in the communications
+    $meta_keys = [
+        'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
+        'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due', 'vin'
+    ];
 
+    // Build the rich HTML email body for the main email
+    $body = "<html><body><h3>New Lead Details</h3>";
     if (isset($lead_data['registration']) && isset($lead_data['model'])) {
         $body .= "<h4>". esc_html($lead_data['leadid']) . " - ". esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
     }
-
-    $meta_keys = [
-        'keepers', 'contact', 'email', 'postcode', 'registration', 'model', 'date',
-        'cylinder', 'colour', 'doors', 'fuel', 'mot', 'transmission', 'mot_due',
-        'vin'
-    ];
-
     $body .= "<ul style='list-style-type:none;'>";
     foreach ($meta_keys as $key) {
         if (!empty($lead_data[$key])) {
-            $body .= "<li>" . ucfirst($key) . ": " . esc_html($lead_data[$key]) . "</li>";
+            $value = esc_html($lead_data[$key]);
+            // --- VIN TWEAK ---
+            if ($key === 'vin' && strlen($value) > 4) {
+                $value = '...' . substr($value, -4);
+            }
+            // --- END TWEAK ---
+            $body .= "<li>" . ucfirst($key) . ": " . $value . "</li>";
         }
     }
     $body .= "</ul></body></html>";
 
-    // Set the main content type header
-    $headers = ['Content-Type: text/html; charset=UTF-8'];
+    // Send the primary email to the user
+    wp_mail($to, $subject, $body, $headers);
 
-    // --- DYNAMIC SMS LOGIC ---
-    // 1. Get the active SMS provider URL from our new helper function
+    // =================================================================
+    // 2. SEND THE SEPARATE PLAIN TEXT SMS NOTIFICATION
+    // =================================================================
     $sms_provider_url = wc_custom_get_active_sms_provider_url();
 
-    // 2. Check if a provider is set and if the user has a phone number
-    if ( !empty($sms_provider_url) ) {
+    if (!empty($sms_provider_url)) {
         $user_phone = get_user_meta($user_id, 'billing_phone', true);
 
-        if ( !empty($user_phone) ) {
-            // 3. Construct the dynamic email-to-sms address and add it as a CC header
-            $phone_email = $user_phone . $sms_provider_url;
-            $headers[] = 'Cc: ' . $phone_email;
-            error_log('SMS notice for lead ' . $lead_data['leadid'] . ' sent to: ' . $phone_email);
+        if (!empty($user_phone)) {
+            $sms_to = $user_phone . $sms_provider_url;
+            $sms_subject = "New Lead: " . $lead_data['registration'];
+
+            // --- DYNAMICALLY BUILD THE PLAIN TEXT SMS BODY ---
+            $sms_body_parts = [];
+            foreach ($meta_keys as $key) {
+                if (!empty($lead_data[$key])) {
+                    $value = $lead_data[$key];
+                    // --- VIN TWEAK ---
+                    if ($key === 'vin' && strlen($value) > 4) {
+                        $value = '...' . substr($value, -4);
+                    }
+                    // --- END TWEAK ---
+                    $sms_body_parts[] = ucfirst($key) . ": " . $value;
+                }
+            }
+            $sms_body = implode("\n", $sms_body_parts);
+
+            // Send the plain text email to the SMS gateway
+            wp_mail($sms_to, $sms_subject, $sms_body);
+
+            error_log('SMS notification for lead ' . $lead_data['leadid'] . ' sent to: ' . $sms_to);
         } else {
             error_log('SMS notice for lead ' . $lead_data['leadid'] . ' failed: User ' . $user_id . ' has no phone number.');
         }
     } else {
          error_log('SMS notice for lead ' . $lead_data['leadid'] . ' failed: No active SMS provider is configured.');
     }
-    // --- END DYNAMIC SMS LOGIC ---
 
-    // Send email using wp_mail()
-    return wp_mail($to, $subject, $body, $headers);
+    return true;
 }
-
 
 add_action('profile_update', 'update_user_postcode_queues', 10, 2);
 function update_user_postcode_queues($user_id, $old_user_data) {

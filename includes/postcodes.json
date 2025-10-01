@@ -11,5 +11,6 @@
   "West Midlands": ["B#", "CV", "DY", "HR", "ST", "TF", "WR", "WS", "WV"],
   "East of England": ["AL", "CB", "CM", "CO", "IP", "LU", "NR", "PE", "SG", "SS"],
   "South East": ["BN", "CT", "GU", "HP", "ME", "MK", "OX", "PO", "RG", "RH", "SL", "SO", "TN"],
-  "South West": ["BA", "BH", "BS", "DT", "EX", "GL", "PL", "SN", "SP", "TA", "TQ", "TR"]
+  "South West": ["BA", "BH", "BS", "DT", "EX", "GL", "PL", "SN", "SP", "TA", "TQ", "TR"],
+  "Test": ["11", "22", "33", "XX", "YY", "ZZ"]
 }

@@ -2,22 +2,15 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 // Function to send email notification
+// --- REPLACE THE OLD FUNCTION WITH THIS NEW VERSION ---
+
 function send_credit_notification($user_id, $subject, $message) {
+    // =================================================================
+    // 1. SEND THE MAIN HTML EMAIL TO THE USER'S INBOX
+    // =================================================================
     $user_info = get_userdata($user_id);
     $to = $user_info->user_email;
-
-   
-
-    // Retrieve user's phone number from user meta data
-    $user_phone = get_user_meta($user_id, 'billing_phone', true);
-
-    // Construct the email address from the phone number
-    $phone_email = $user_phone . '@txtlocal.co.uk';
-
-    $headers = array(
-        'Content-Type: text/html; charset=UTF-8',
-        'Cc: ' . $phone_email // Include the CC recipient directly in the headers
-    );
+    $headers = ['Content-Type: text/html; charset=UTF-8'];
 
     // Create a structured HTML email body
     $body = "<html><body>";
@@ -27,12 +20,17 @@ function send_credit_notification($user_id, $subject, $message) {
     $body .= "</body></html>";
 
     if (wp_mail($to, $subject, $body, $headers)) {
-        error_log("Email sent to user $user_id with subject: $subject");
+        error_log("Credit notification email sent to user $user_id with subject: $subject");
     } else {
-        error_log("Failed to send email to user $user_id with subject: $subject");
+        error_log("Failed to send credit notification email to user $user_id with subject: $subject");
     }
-}
 
+    // =================================================================
+    // 2. SEND THE SEPARATE PLAIN TEXT SMS NOTIFICATION
+    // =================================================================
+    // Use the same message content but without HTML for the SMS.
+    send_dynamic_sms_notification($user_id, $subject, $message);
+}
 // Function to notify admin
 function notify_admin($subject, $message) {
     $admin_email = get_option('admin_email');

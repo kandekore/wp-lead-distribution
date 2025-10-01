@@ -1,13 +1,80 @@
 <?php
 
-if ( ! defined( 'ABSPATH' ) ) exit;    
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+/**
+ * =================================================================================
+ * HELPER FUNCTIONS (DEFINED FIRST TO PREVENT CRITICAL ERRORS)
+ * =================================================================================
+ */
+
+/**
+ * Helper function to get the currently active SMS provider URL from the database.
+ * @return string The active provider URL (e.g., '@txtlocal.co.uk') or empty string if none is set.
+ */
+function wc_custom_get_active_sms_provider_url() {
+    $options = get_option( 'wc_sms_providers' );
+    $active_key = isset( $options['active'] ) ? $options['active'] : '';
+    $providers = isset( $options['providers'] ) ? $options['providers'] : array();
+
+    if ( ! empty( $active_key ) && isset( $providers[ $active_key ] ) ) {
+        return $providers[ $active_key ]['url'];
+    }
+
+    return ''; // Return empty if no active provider is found
+}
+
+/**
+ * Sends a plain-text SMS message to a user using the dynamically configured provider.
+ *
+ * @param int    $user_id The ID of the user to send the SMS to.
+ * @param string $subject The subject of the SMS (may be used by some gateways).
+ * @param string $message The plain-text message to send.
+ * @return bool True on success, false on failure.
+ */
+function send_dynamic_sms_notification( $user_id, $subject, $message ) {
+    // Get the dynamically configured SMS provider URL
+    $sms_provider_url = wc_custom_get_active_sms_provider_url();
+
+    // Abort if no provider is set up in the settings
+    if ( empty( $sms_provider_url ) ) {
+        error_log( 'SMS sending failed: No active SMS provider is configured.' );
+        return false;
+    }
+
+    // Get the user's phone number from their billing details
+    $user_phone = get_user_meta( $user_id, 'billing_phone', true );
+
+    // Abort if the user doesn't have a phone number
+    if ( empty( $user_phone ) ) {
+        error_log( 'SMS sending failed: User ' . $user_id . ' has no phone number.' );
+        return false;
+    }
+
+    // Construct the final email-to-sms address
+    $sms_to = $user_phone . $sms_provider_url;
+
+    // Send the plain-text email
+    wp_mail( $sms_to, $subject, $message );
+
+    error_log( 'SMS notification sent to user ' . $user_id . ' via ' . $sms_to );
+
+    return true;
+}
+
+
+/**
+ * =================================================================================
+ * MAIN PLUGIN FUNCTIONS
+ * =================================================================================
+ */
 
 add_action('init', 'register_lead_post_type');
 function register_lead_post_type() {
     $args = [
         'public' => false,
         'label'  => 'Leads',
-        'show_ui' => true, 
+        'show_ui' => true,
         'capability_type' => 'post',
         'hierarchical' => false,
         'supports' => ['title', 'editor', 'custom-fields'],
@@ -53,7 +120,7 @@ function store_lead($lead_data, $user_id) {
             'utm_source'  => $lead_data['utm_source'],    // Store utm_source directly
             'vt_keyword'  => $lead_data['vt_keyword'],    // Store vt_keyword directly
             'vt_adgroup'  => $lead_data['vt_adgroup'],    // Store vt_adgroup directly
-            'milage' => $lead_data['milage'], 
+            'milage' => $lead_data['milage'],
         ],
     ];
 
@@ -104,32 +171,17 @@ add_action('pre_get_posts', 'filter_leads_by_custom_filters');
 function filter_leads_by_custom_filters($query) {
     global $pagenow;
 
-    // Ensure we are on the correct admin page for 'lead' post type and main query
     if (is_admin() && 'edit.php' === $pagenow && 'lead' === $query->query['post_type'] && $query->is_main_query()) {
-        $meta_query = []; // Initialize array for meta queries
-        $date_query_args = []; // Initialize array for date query arguments
+        $meta_query = [];
+        $date_query_args = [];
 
-        // Check if ANY custom filter is active (date, assigned user, or postcode search)
         $custom_filter_active = !empty($_GET['lead_date_filter']) || !empty($_GET['assigned_user']) || !empty($_GET['lead_postcode_search']);
 
         if ($custom_filter_active) {
-            // Crucial: Always clear default search ('s') and month ('m') parameters
-            // if any of our custom filters are actively being used.
             $query->set('s', '');
             $query->set('m', '');
         }
 
-        // 1. Handle Postcode Search (remains as fixed previously)
-        // if (!empty($_GET['lead_postcode_search'])) {
-        //     $search_term = sanitize_text_field($_GET['lead_postcode_search']);
-        //     $meta_query[] = [
-        //         'key' => 'postcode',
-        //         'value' => $search_term . '%', // Search for postcodes starting with the term
-        //         'compare' => 'LIKE',
-        //     ];
-        // }
-
-        // 2. Handle Assigned User filter (remains as fixed previously)
         if (!empty($_GET['assigned_user'])) {
             $meta_query[] = [
                 'key' => 'assigned_user',
@@ -138,81 +190,50 @@ function filter_leads_by_custom_filters($query) {
             ];
         }
 
-        // Apply meta_query if any conditions exist
         if (!empty($meta_query)) {
-            // If there are multiple meta queries, ensure they are combined with 'AND' relation
             if (count($meta_query) > 1) {
                 $meta_query['relation'] = 'AND';
             }
             $query->set('meta_query', $meta_query);
         }
 
-        // 3. Handle Date filter (UPDATED to use wp_date consistently for date boundaries)
         if (!empty($_GET['lead_date_filter'])) {
-            $start_of_week = get_option('start_of_week', 0); // 0 (Sunday) to 6 (Saturday)
-            $current_day_of_week = (int) wp_date('w'); // Get current day of week using wp_date
+            $start_of_week = get_option('start_of_week', 0);
+            $current_day_of_week = (int) wp_date('w');
 
             switch ($_GET['lead_date_filter']) {
                 case 'today':
                     $today_start = wp_date('Y-m-d 00:00:00');
                     $today_end = wp_date('Y-m-d 23:59:59');
-                    $date_query_args = [
-                        'after' => $today_start,
-                        'before' => $today_end,
-                        'inclusive' => true,
-                    ];
+                    $date_query_args = ['after' => $today_start, 'before' => $today_end, 'inclusive' => true];
                     break;
                 case 'yesterday':
-                    // Calculate start and end of yesterday using wp_date and strtotime
                     $yesterday_start = wp_date('Y-m-d 00:00:00', strtotime('-1 day'));
                     $yesterday_end = wp_date('Y-m-d 23:59:59', strtotime('-1 day'));
-                    $date_query_args = [
-                        'after' => $yesterday_start,
-                        'before' => $yesterday_end,
-                        'inclusive' => true,
-                    ];
+                    $date_query_args = ['after' => $yesterday_start, 'before' => $yesterday_end, 'inclusive' => true];
                     break;
                 case 'this_week':
-                    // Adjust calculations to use wp_date consistently
                     $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
                     $startOfWeek = wp_date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
                     $endOfWeek = wp_date('Y-m-d', strtotime($startOfWeek . ' +6 days'));
-                    $date_query_args = [
-                        'after' => $startOfWeek . ' 00:00:00',
-                        'before' => $endOfWeek . ' 23:59:59',
-                        'inclusive' => true,
-                    ];
+                    $date_query_args = ['after' => $startOfWeek . ' 00:00:00', 'before' => $endOfWeek . ' 23:59:59', 'inclusive' => true];
                     break;
                 case 'last_week':
-                    // Adjust calculations to use wp_date consistently
                     $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
                     $startOfThisWeek = wp_date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
                     $startOfLastWeek = wp_date('Y-m-d', strtotime($startOfThisWeek . ' -7 days'));
                     $endOfLastWeek = wp_date('Y-m-d', strtotime($startOfThisWeek . ' -1 day'));
-                    $date_query_args = [
-                        'after' => $startOfLastWeek . ' 00:00:00',
-                        'before' => $endOfLastWeek . ' 23:59:59',
-                        'inclusive' => true,
-                    ];
+                    $date_query_args = ['after' => $startOfLastWeek . ' 00:00:00', 'before' => $endOfLastWeek . ' 23:59:59', 'inclusive' => true];
                     break;
                 case 'this_month':
-                    $start_of_month = wp_date('Y-m-01'); // Use wp_date
-                    $end_of_month = wp_date('Y-m-t 23:59:59'); // Get last day of month and add end time
-                    $date_query_args = [
-                        'after' => $start_of_month . ' 00:00:00',
-                        'before' => $end_of_month,
-                        'inclusive' => true,
-                    ];
+                    $start_of_month = wp_date('Y-m-01');
+                    $end_of_month = wp_date('Y-m-t 23:59:59');
+                    $date_query_args = ['after' => $start_of_month . ' 00:00:00', 'before' => $end_of_month, 'inclusive' => true];
                     break;
                 case 'last_month':
-                    // Adjust calculations to use wp_date consistently
                     $start_of_last_month = wp_date('Y-m-01', strtotime('first day of last month'));
                     $end_of_last_month = wp_date('Y-m-t 23:59:59', strtotime('last day of last month'));
-                    $date_query_args = [
-                        'after' => $start_of_last_month . ' 00:00:00',
-                        'before' => $end_of_last_month,
-                        'inclusive' => true,
-                    ];
+                    $date_query_args = ['after' => $start_of_last_month . ' 00:00:00', 'before' => $end_of_last_month, 'inclusive' => true];
                     break;
             }
             if (!empty($date_query_args)) {
@@ -220,27 +241,21 @@ function filter_leads_by_custom_filters($query) {
             }
         }
 
-        // 4. Handle sorting by postcode (remains as fixed previously, affects orderby)
         if (isset($query->query_vars['orderby']) && 'postcode' === $query->query_vars['orderby']) {
             $query->set('meta_key', 'postcode');
             $query->set('orderby', 'meta_value');
         }
     }
 }
-// Re-add the posts_where filter for postcode search, which previously worked
-add_filter('posts_where', 'lead_postcode_search_where', 10, 2);
 
+add_filter('posts_where', 'lead_postcode_search_where', 10, 2);
 function lead_postcode_search_where($where, $query) {
     global $wpdb;
 
-    // Only apply if it's the main query on the leads admin page and our custom search parameter is present
     if (is_admin() && $query->is_main_query() && isset($query->query_vars['post_type']) && $query->query_vars['post_type'] === 'lead') {
         if (!empty($_GET['lead_postcode_search'])) {
             $search_term = sanitize_text_field($_GET['lead_postcode_search']);
-            // Escape the search term for LIKE, then manually add the wildcard
             $escaped_search_term = $wpdb->esc_like($search_term);
-            // Ensure this is added as an AND condition to existing WHERE clause
-            // This EXISTS subquery is robust for meta_key LIKE searches
             $where .= " AND EXISTS (SELECT 1 FROM {$wpdb->postmeta} WHERE post_id = {$wpdb->posts}.ID AND meta_key = 'postcode' AND meta_value LIKE '{$escaped_search_term}%')";
         }
     }
@@ -249,56 +264,36 @@ function lead_postcode_search_where($where, $query) {
 
 function apply_date_filter(&$query, $filter_value) {
     $date_query = [];
-    $start_of_week = get_option('start_of_week', 0); // Get the WordPress start of the week (0=Sunday)
-    $current_day_of_week = date('w'); // 0 (Sunday) to 6 (Saturday)
+    $start_of_week = get_option('start_of_week', 0);
+    $current_day_of_week = date('w');
 
     switch ($filter_value) {
         case 'today':
-            $date_query = [
-                'year' => date('Y'), 
-                'month' => date('m'), 
-                'day' => date('d')
-            ];
+            $date_query = ['year' => date('Y'), 'month' => date('m'), 'day' => date('d')];
             break;
         case 'yesterday':
             $yesterday = strtotime('-1 day');
-            $date_query = [
-                'year' => date('Y', $yesterday), 
-                'month' => date('m', $yesterday), 
-                'day' => date('d', $yesterday)
-            ];
+            $date_query = ['year' => date('Y', $yesterday), 'month' => date('m', $yesterday), 'day' => date('d', $yesterday)];
             break;
         case 'this_week':
-            // Calculate start and end of this week based on WordPress setting
             $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
             $startOfWeek = date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
             $endOfWeek = date('Y-m-d', strtotime($startOfWeek . ' +6 days'));
-            $date_query = [
-                'after' => $startOfWeek, 
-                'before' => $endOfWeek, 
-                'inclusive' => true
-            ];
+            $date_query = ['after' => $startOfWeek, 'before' => $endOfWeek, 'inclusive' => true];
             break;
         case 'last_week':
-            // Calculate start and end of last week
             $days_since_start_of_week = ( $current_day_of_week - $start_of_week + 7 ) % 7;
             $startOfThisWeek = date('Y-m-d', strtotime('-' . $days_since_start_of_week . ' days'));
             $startOfLastWeek = date('Y-m-d', strtotime($startOfThisWeek . ' -7 days'));
             $endOfLastWeek = date('Y-m-d', strtotime($startOfThisWeek . ' -1 day'));
-            $date_query = [
-                'after' => $startOfLastWeek, 
-                'before' => $endOfLastWeek, 
-                'inclusive' => true
-            ];
+            $date_query = ['after' => $startOfLastWeek, 'before' => $endOfLastWeek, 'inclusive' => true];
             break;
-        // Add other cases if needed
     }
 
     if ($date_query) {
         $query->set('date_query', [$date_query]);
     }
 }
-
 
 function enqueue_admin_scripts() {
     global $pagenow, $typenow;
@@ -307,10 +302,7 @@ function enqueue_admin_scripts() {
         ?>
         <script type="text/javascript">
             jQuery(document).ready(function($) {
-                // Change month dropdown text
                 $("select[name='m'] option[value='0']").text('By Months');
-
-                // Hide the second filter button if it exists
                 $("#filter_action").hide();
             });
         </script>
@@ -319,15 +311,12 @@ function enqueue_admin_scripts() {
 }
 add_action('admin_footer', 'enqueue_admin_scripts');
 
-
 add_filter('manage_lead_posts_columns', 'add_custom_lead_columns');
 function add_custom_lead_columns($columns) {
-    // Add new columns
     $columns['leadid'] = __('Lead ID');
     $columns['postcode'] = __('Postcode');
-    $columns['vin'] = __('VIN'); // Add VIN column
+    $columns['vin'] = __('VIN');
     $columns['post_author'] = __('Agent');
-
     return $columns;
 }
 
@@ -340,7 +329,7 @@ function custom_lead_column_content($column_name, $post_id) {
         case 'postcode':
             echo get_post_meta($post_id, 'postcode', true);
             break;
-        case 'vin': // Handle VIN column
+        case 'vin':
             echo get_post_meta($post_id, 'vin', true);
             break;
         case 'post_author':
@@ -354,257 +343,120 @@ function custom_lead_column_content($column_name, $post_id) {
 add_filter('posts_search', 'search_lead_id_in_admin', 10, 2);
 function search_lead_id_in_admin($search, $wp_query) {
     global $wpdb;
-    if (!is_admin()) return $search;
-    if (!$wp_query->is_search) return $search;
-    if (!isset($wp_query->query['post_type']) || 'lead' != $wp_query->query['post_type']) return $search;
+    if (!is_admin() || !$wp_query->is_search || !isset($wp_query->query['post_type']) || 'lead' != $wp_query->query['post_type']) {
+        return $search;
+    }
 
-    $search_terms = $wp_query->query_vars['s'];
-    $search_terms = $wpdb->_escape($search_terms);
-
+    $search_terms = $wpdb->_escape($wp_query->query_vars['s']);
     if (empty($search_terms)) return $search;
 
-    $search = " AND (";
-    $search .= "$wpdb->posts.post_title LIKE '%$search_terms%'";
-    $search .= " OR $wpdb->posts.post_content LIKE '%$search_terms%'";
-    $search .= " OR EXISTS (";
-    $search .= "     SELECT * FROM $wpdb->postmeta";
-    $search .= "     WHERE post_id = $wpdb->posts.ID";
-    $search .= "     AND meta_key = 'leadid'";
-    $search .= "     AND meta_value LIKE '%$search_terms%'";
-    $search .= " )";
-    $search .= ") ";
-
+    $search = " AND ($wpdb->posts.post_title LIKE '%$search_terms%' OR $wpdb->posts.post_content LIKE '%$search_terms%' OR EXISTS (SELECT * FROM $wpdb->postmeta WHERE post_id = $wpdb->posts.ID AND meta_key = 'leadid' AND meta_value LIKE '%$search_terms%'))";
     return $search;
 }
 
-// Add meta box to lead post type
-function add_lead_resend_meta_box() {
-    add_meta_box(
-        'lead_resend_meta_box',
-        'Resend Lead',
-        'render_lead_resend_meta_box',
-        'lead',
-        'side', // Display this meta box on the side
-        'default'
-    );
-}
 add_action('add_meta_boxes', 'add_lead_resend_meta_box');
+function add_lead_resend_meta_box() {
+    add_meta_box('lead_resend_meta_box', 'Resend Lead', 'render_lead_resend_meta_box', 'lead', 'side', 'default');
+}
 
-// Render the meta box
-// Render the meta box
 function render_lead_resend_meta_box($post) {
-    // Retrieve the existing resend message if available
     $resend_message = get_post_meta($post->ID, '_lead_resend_message', true);
     $resend_checked = get_post_meta($post->ID, '_lead_resend_checked', true);
     $resend_count = (int)get_post_meta($post->ID, '_lead_resend_count', true);
-
-    // Display the fields
     ?>
-    <label for="lead_resend">
-        <input type="checkbox" name="lead_resend" id="lead_resend" value="1" <?php checked($resend_checked, '1'); ?>>
-        Resend this lead
-    </label>
+    <label for="lead_resend"><input type="checkbox" name="lead_resend" id="lead_resend" value="1" <?php checked($resend_checked, '1'); ?>> Resend this lead</label>
     <br><br>
     <label for="lead_resend_message">Resend Message</label><br>
     <textarea name="lead_resend_message" id="lead_resend_message" rows="4" style="width:100%;"><?php echo esc_textarea($resend_message); ?></textarea>
     <br><br>
-
     <?php if ($resend_count > 0) : ?>
         <p><strong><?php echo esc_html($resend_count); ?></strong> <?php echo _n('resend', 'resends', $resend_count, 'text-domain'); ?> have been made for this lead.</p>
     <?php endif; ?>
-
     <?php
     wp_nonce_field('save_lead_resend_meta_box_data', 'lead_resend_meta_box_nonce');
 }
 
-
-// Save the checkbox and message data
+add_action('save_post', 'save_lead_resend_meta_box_data');
 function save_lead_resend_meta_box_data($post_id) {
-    // Verify the nonce to ensure the request is valid
-    if (!isset($_POST['lead_resend_meta_box_nonce']) || !wp_verify_nonce($_POST['lead_resend_meta_box_nonce'], 'save_lead_resend_meta_box_data')) {
+    if (!isset($_POST['lead_resend_meta_box_nonce']) || !wp_verify_nonce($_POST['lead_resend_meta_box_nonce'], 'save_lead_resend_meta_box_data') || (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) || !current_user_can('edit_post', $post_id)) {
         return;
     }
-
-    // Ensure it's not an autosave
-    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
-        return;
-    }
-
-    // Check the user's permission
-    if (!current_user_can('edit_post', $post_id)) {
-        return;
-    }
-
-    // Save the checkbox
-    if (isset($_POST['lead_resend'])) {
-        update_post_meta($post_id, '_lead_resend_checked', '1');
-    } else {
-        update_post_meta($post_id, '_lead_resend_checked', '0');
-    }
-
-    // Save the message
+    update_post_meta($post_id, '_lead_resend_checked', isset($_POST['lead_resend']) ? '1' : '0');
     if (isset($_POST['lead_resend_message'])) {
         update_post_meta($post_id, '_lead_resend_message', sanitize_textarea_field($_POST['lead_resend_message']));
     }
 }
-add_action('save_post', 'save_lead_resend_meta_box_data');
 
-// Hook into the post save action to check if resend is triggered
+add_action('save_post', 'maybe_resend_lead');
 function maybe_resend_lead($post_id) {
-    // Only trigger for lead post type
-    if (get_post_type($post_id) !== 'lead') {
+    if (get_post_type($post_id) !== 'lead' || get_post_meta($post_id, '_lead_resend_checked', true) !== '1') {
         return;
     }
 
-    // Check if the resend checkbox is checked
-    $resend_checked = get_post_meta($post_id, '_lead_resend_checked', true);
-    if ($resend_checked === '1') {
-        // Get the lead owner (author)
-        $lead_owner_id = get_post_field('post_author', $post_id);
-        $lead_owner = get_userdata($lead_owner_id);
+    $lead_owner_id = get_post_field('post_author', $post_id);
+    $resend_message = get_post_meta($post_id, '_lead_resend_message', true);
 
-        // Get the resend message from the custom textbox
-        $resend_message = get_post_meta($post_id, '_lead_resend_message', true);
+    $lead_data = [
+        'leadid' => get_post_meta($post_id, 'leadid', true),
+        'registration' => get_post_meta($post_id, 'registration', true),
+        'model' => get_post_meta($post_id, 'model', true),
+        'keepers' => get_post_meta($post_id, 'keepers', true),
+        'contact' => get_post_meta($post_id, 'contact', true),
+        'resend_message' => $resend_message,
+    ];
 
-        // Get the lead details (you can customize this part to include the relevant lead information)
-        $lead_details = get_post($post_id)->post_content; // Assuming lead data is in post_content
-
-        // Send email and SMS using the send_lead_email_to_user function
-        $lead_data = [
-            'leadid' => get_post_meta($post_id, 'leadid', true),
-            'registration' => get_post_meta($post_id, 'registration', true),
-            'model' => get_post_meta($post_id, 'model', true),
-            'keepers' => get_post_meta($post_id, 'keepers', true),
-    'contact' => get_post_meta($post_id, 'contact', true),
-            // Add any other lead details you want to include here
-        ];
-
-        // Include the resend message in the lead details
-        $lead_data['resend_message'] = $resend_message;
-
-        // Send lead details via email and SMS (using @txtlocal)
-        $mail_sent = resend_lead_email_to_user($lead_owner_id, $lead_data);
-
-        if ($mail_sent) {
-            // Optionally add a flag to mark that the lead has been resent
-            update_post_meta($post_id, '_lead_resent', '1');
-
-            // Uncheck the resend box to prevent resending on the next save
-            update_post_meta($post_id, '_lead_resend_checked', '0');
-
-            // Log the resend action
-            $resend_count = (int)get_post_meta($post_id, '_lead_resend_count', true);
-            $resend_count++;
-            update_post_meta($post_id, '_lead_resend_count', $resend_count);
-
-            // Notify admin of successful resend
-            add_action('admin_notices', function() {
-                ?>
-                <div class="notice notice-success is-dismissible">
-                    <p><?php _e('The lead has been successfully resent via email and SMS.', 'text-domain'); ?></p>
-                </div>
-                <?php
-            });
-        } else {
-            add_action('admin_notices', function() {
-                ?>
-                <div class="notice notice-error is-dismissible">
-                    <p><?php _e('Failed to resend the lead.', 'text-domain'); ?></p>
-                </div>
-                <?php
-            });
-        }
+    if (resend_lead_email_to_user($lead_owner_id, $lead_data)) {
+        update_post_meta($post_id, '_lead_resent', '1');
+        update_post_meta($post_id, '_lead_resend_checked', '0');
+        $resend_count = (int)get_post_meta($post_id, '_lead_resend_count', true);
+        update_post_meta($post_id, '_lead_resend_count', $resend_count + 1);
+        add_action('admin_notices', function() {
+            echo '<div class="notice notice-success is-dismissible"><p>' . __('The lead has been successfully resent via email and SMS.', 'text-domain') . '</p></div>';
+        });
+    } else {
+        add_action('admin_notices', function() {
+            echo '<div class="notice notice-error is-dismissible"><p>' . __('Failed to resend the lead.', 'text-domain') . '</p></div>';
+        });
     }
 }
-add_action('save_post', 'maybe_resend_lead');
 
 function resend_lead_email_to_user($user_id, $lead_data) {
-    // Log lead data for debugging
     error_log(print_r($lead_data, true));
-
-    // Retrieve user's email address
     $user_info = get_userdata($user_id);
     $to = $user_info->user_email;
-
-    // Retrieve user's phone number from user meta data
-    $user_phone = get_user_meta($user_id, 'billing_phone', true);
-    $phone_email = $user_phone . '@txtlocal.co.uk';
-
-    // Set the subject of the email
     $subject = "Resend Lead: " . $lead_data['leadid'];
-
-    // Retrieve custom fields from lead data
     $keepers = isset($lead_data['keepers']) ? $lead_data['keepers'] : get_post_meta($lead_data['ID'], 'keepers', true);
     $contact = isset($lead_data['contact']) ? $lead_data['contact'] : get_post_meta($lead_data['ID'], 'contact', true);
 
-    // Prepare the email body without "%n" for the primary email
-    $body = "<html><body>";
-    $body .= "<h3>Customer Callback or Message Regarding Lead" . esc_html($lead_data['leadid']) . "</h3>";
-
+    // 1. SEND THE MAIN HTML EMAIL
+    $body = "<html><body><h3>Customer Callback or Message Regarding Lead " . esc_html($lead_data['leadid']) . "</h3>";
     if (isset($lead_data['registration']) && isset($lead_data['model'])) {
         $body .= "<h4>". esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>";
     }
-
-    if ($keepers) {
-        $body .= "<p><strong>Name:</strong> " . esc_html($keepers) . "</p>";
-    }
-
-    if ($contact) {
-        $body .= "<p><strong>Contact:</strong> " . esc_html($contact) . "</p>";
-    }
-
+    if ($keepers) $body .= "<p><strong>Name:</strong> " . esc_html($keepers) . "</p>";
+    if ($contact) $body .= "<p><strong>Contact:</strong> " . esc_html($contact) . "</p>";
     if (isset($lead_data['resend_message']) && !empty($lead_data['resend_message'])) {
         $body .= "<p><strong>Message:</strong> " . esc_html($lead_data['resend_message']) . "</p>";
     }
-
     $body .= "</body></html>";
-
-    // Send the primary email without "%n" line breaks
-    $headers = array('Content-Type: text/html; charset=UTF-8');
+    $headers = ['Content-Type: text/html; charset=UTF-8'];
     $email_sent = wp_mail($to, $subject, $body, $headers);
 
-    // Prepare the email body with "%n" for the SMS email
-    $body_sms = "<html><body>";
-    $body_sms .= "<h3>Customer Callback or Message Regarding Lead " . esc_html($lead_data['leadid']) . "</h3>%n";
-
-    if (isset($lead_data['registration']) && isset($lead_data['model'])) {
-        $body_sms .= "<h4>". esc_html($lead_data['registration']) . " - " . esc_html($lead_data['model']) . "</h4>%n";
-    }
-
-    if ($keepers) {
-        $body_sms .= "<p><strong>Name:</strong> " . esc_html($keepers) . "</p>%n";
-    }
-
-    if ($contact) {
-        $body_sms .= "<p><strong>Contact:</strong> " . esc_html($contact) . "</p>%n";
-    }
-
+    // 2. SEND THE SEPARATE PLAIN TEXT SMS
+    $sms_subject = "Message on Lead: " . $lead_data['registration'];
+    $sms_body = "Message on Lead " . $lead_data['leadid'] . "\n";
+    $sms_body .= "Name: " . $keepers . "\n";
+    $sms_body .= "Contact: " . $contact . "\n";
     if (isset($lead_data['resend_message']) && !empty($lead_data['resend_message'])) {
-        $body_sms .= "<p><strong>Message:</strong> " . esc_html($lead_data['resend_message']) . "</p>%n";
+        $sms_body .= "Message: " . $lead_data['resend_message'];
     }
+    send_dynamic_sms_notification($user_id, $sms_subject, $sms_body);
 
-    $body_sms .= "</body></html>";
-
-    // Send the SMS email with "%n" line breaks
-    $headers_sms = array('Content-Type: text/html; charset=UTF-8');
-    $sms_sent = wp_mail($phone_email, $subject, $body_sms, $headers_sms);
-
-    // Return true if both emails were sent successfully
-    return $email_sent && $sms_sent;
+    return $email_sent;
 }
 
-
-// Add the checkbox field to the user profile
 add_action('show_user_profile', 'add_lead_priority_checkbox');
 add_action('edit_user_profile', 'add_lead_priority_checkbox');
-
-/*************  ✨ Codeium Command ⭐  *************/
-/**
- * Adds a checkbox field to the user profile to allow users to increase their lead reception probability.
- *
- * @param WP_User $user The user object.
- */
-/******  b1e0b10d-83b7-476c-949c-0005f4da6cf8  *******/
 function add_lead_priority_checkbox($user) {
     ?>
     <h3>Lead Reception Priority</h3>
@@ -620,82 +472,46 @@ function add_lead_priority_checkbox($user) {
     <?php
 }
 
-// Save the checkbox value
 add_action('personal_options_update', 'save_lead_priority_checkbox');
 add_action('edit_user_profile_update', 'save_lead_priority_checkbox');
-
 function save_lead_priority_checkbox($user_id) {
     if (current_user_can('edit_user', $user_id)) {
         update_user_meta($user_id, 'lead_priority', isset($_POST['lead_priority']) ? '1' : '0');
     }
 }
-//Add My Account link to the login form
 
+add_shortcode( 'my_account_link', 'my_account_link_shortcode' );
 function my_account_link_shortcode() {
-    if ( is_user_logged_in() ) {
-        return '<div class="my-account-link" style="text-align: center;">
-                    <a href="/my-account" class="button">My Account</a>
-                </div>';
+    if (is_user_logged_in()) {
+        return '<div class="my-account-link" style="text-align: center;"><a href="/my-account" class="button">My Account</a></div>';
     }
     return '';
 }
-add_shortcode( 'my_account_link', 'my_account_link_shortcode' );
 
-// Redirect to checkout after adding to cart when 'redirect_to=checkout' is present
-// Force redirect to checkout when 'redirect_to=checkout' is present in the URL
-add_action( 'template_redirect', 'force_redirect_to_checkout' );
+add_action('template_redirect', 'force_redirect_to_checkout');
 function force_redirect_to_checkout() {
-    if ( isset( $_GET['redirect_to'] ) && $_GET['redirect_to'] === 'checkout' ) {
-        // Perform the add-to-cart action if 'add-to-cart' parameter is present
-        // if ( isset( $_GET['add-to-cart'] ) ) {
-        //     // Handle the add-to-cart action
-        //     WC_Form_Handler::add_to_cart_action();
-        // }
-
-        // Redirect to checkout
-        wp_safe_redirect( wc_get_checkout_url() );
+    if (isset($_GET['redirect_to']) && $_GET['redirect_to'] === 'checkout') {
+        wp_safe_redirect(wc_get_checkout_url());
         exit;
     }
 }
 
-// Ensure notices are displayed on the checkout page
-add_action( 'woocommerce_before_checkout_form', 'woocommerce_output_all_notices', 10 );
+add_action('woocommerce_before_checkout_form', 'woocommerce_output_all_notices', 10);
 
-// Automatically apply coupon when 'coupon_code' parameter is present in the URL
-add_action( 'woocommerce_add_to_cart', 'apply_coupon_code_from_url', 10, 6 );
-function apply_coupon_code_from_url( $cart_item_key, $product_id, $quantity, $variation_id, $variation, $cart_item_data ) {
-    if ( isset( $_GET['coupon_code'] ) ) {
-        $coupon_code = sanitize_text_field( $_GET['coupon_code'] );
-
-        // Check if the coupon is valid and not already applied
-        if ( ! WC()->cart->has_discount( $coupon_code ) ) {
-            // Apply the coupon
-            WC()->cart->apply_coupon( $coupon_code );
-            wc_clear_notices(); // Clear default WooCommerce notice
-
-            // Optionally add a custom notice
-            wc_add_notice( sprintf( 'Coupon code "%s" has been applied to your order.', esc_html( $coupon_code ) ), 'success' );
+add_action('woocommerce_add_to_cart', 'apply_coupon_code_from_url', 10, 6);
+function apply_coupon_code_from_url($cart_item_key, $product_id, $quantity, $variation_id, $variation, $cart_item_data) {
+    if (isset($_GET['coupon_code'])) {
+        $coupon_code = sanitize_text_field($_GET['coupon_code']);
+        if (!WC()->cart->has_discount($coupon_code)) {
+            WC()->cart->apply_coupon($coupon_code);
+            wc_clear_notices();
+            wc_add_notice(sprintf('Coupon code "%s" has been applied to your order.', esc_html($coupon_code)), 'success');
         }
     }
 }
 
 add_filter('manage_edit_lead_sortable_columns', 'make_postcode_column_sortable');
 function make_postcode_column_sortable($columns) {
-    $columns['postcode'] = 'postcode'; // 'postcode' is the meta_key for sorting
+    $columns['postcode'] = 'postcode';
     return $columns;
-}
-/**
- * Helper function to get the currently active SMS provider URL from the database.
- * @return string The active provider URL (e.g., '@txtlocal.co.uk') or empty string if none is set.
- */
-function wc_custom_get_active_sms_provider_url() {
-    $options = get_option( 'wc_sms_providers' );
-    $active_key = isset( $options['active'] ) ? $options['active'] : '';
-    $providers = isset( $options['providers'] ) ? $options['providers'] : array();
-
-    if ( ! empty( $active_key ) && isset( $providers[ $active_key ] ) ) {
-        return $providers[ $active_key ]['url'];
-    }
-
-    return ''; // Return empty if no active provider is found
 }
