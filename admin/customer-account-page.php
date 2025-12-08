@@ -291,46 +291,43 @@ function display_filtered_leads($date_filter) {
 }
 
 
+// --- REPLACE WITH THIS UPDATED FUNCTION ---
+
 function lead_details_endpoint_content() {
-    // Directly getting lead_id from URL for debugging purposes
     $lead_id = isset($_GET['lead_id']) ? intval($_GET['lead_id']) : 0;
 
     if ($lead_id) {
         $post = get_post($lead_id);
-        if ($post && $post->post_type === 'lead') {
-            // Check if the current user is the lead's author
-            if ($post->post_author == get_current_user_id()) {
-                // Display the post title (considering registration and model as title)
-                echo '<h3>' . esc_html(get_the_title($lead_id)) . '</h3>';
-                
-                // Manually display selected meta data
-                $meta_keys = [
-                    'keepers', 'contact', 'email','postcode', 'registration', 'model', 'date', 'cylinder', 'colour', 'doors', 
-                    'fuel', 'mot', 'transmission', 
-                    'mot_due', 'vin'
-                ];
-                $leadid_meta = get_post_meta($lead_id, 'leadid', true);
-                echo '<h3>ID:' . esc_html($leadid_meta) . '</h3>';
-                echo '<h4>Lead Details:</h4>';
-                echo '<ul style="list-style-type:none;">';
-                foreach ($meta_keys as $key) {
-                    $value = get_post_meta($lead_id, $key, true);
-                    if (!empty($value)) { // Only display if value is not empty
-                        echo '<li>' . ucfirst(esc_html($key) ). ': ' . esc_html($value) . '</li>';
+        if ($post && $post->post_type === 'lead' && $post->post_author == get_current_user_id()) {
+            echo '<h3>' . esc_html(get_the_title($lead_id)) . '</h3>';
+
+            $meta_keys = [
+                'keepers', 'contact', 'email','postcode', 'registration', 'model', 'date', 'cylinder', 'colour', 'doors',
+                'fuel', 'mot', 'transmission', 'mot_due', 'vin'
+            ];
+            $leadid_meta = get_post_meta($lead_id, 'leadid', true);
+            echo '<h3>ID:' . esc_html($leadid_meta) . '</h3>';
+            echo '<h4>Lead Details:</h4>';
+            echo '<ul style="list-style-type:none;">';
+            foreach ($meta_keys as $key) {
+                $value = get_post_meta($lead_id, $key, true);
+                if (!empty($value)) {
+                    // --- VIN TWEAK ---
+                    if ($key === 'vin' && strlen($value) > 4) {
+                        $value = '...' . substr($value, -4);
                     }
+                    // --- END TWEAK ---
+                    echo '<li>' . ucfirst(esc_html($key) ). ': ' . esc_html($value) . '</li>';
                 }
-                echo '</ul>';
-                
-            } else {
-                echo '<p>' . __('You do not have permission to view this lead.', 'text-domain') . '</p>';
             }
+            echo '</ul>';
+
         } else {
-            echo '<p>' . __('Lead not found.', 'text-domain') . '</p>';
+            echo '<p>' . __('You do not have permission to view this lead.', 'text-domain') . '</p>';
         }
     } else {
         echo '<p>' . __('No lead ID provided.', 'text-domain') . '</p>';
     }
 }
-
 
 add_action('woocommerce_account_lead-details_endpoint', 'lead_details_endpoint_content');
